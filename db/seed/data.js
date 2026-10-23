@@ -1,0 +1,175 @@
+'use strict';
+
+const { hashPassword } = require('../../srv/auth/passwords');
+
+const IDS = {
+  locYard: '11111111-1111-4111-8111-111111111111',
+  locShop: '22222222-2222-4222-8222-222222222222',
+  locP2: '33333333-3333-4333-8333-333333333333',
+  cust: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  eqExc: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  eqGen: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  rental: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  item: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  checkout: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  checkin: '12121212-1212-4121-8121-121212121212',
+  dmgNew: '13131313-1313-4131-8131-131313131313',
+  dmgOld: '14141414-1414-4141-8141-141414141414',
+  photo1: '15151515-1515-4151-8151-151515151515',
+  photo2: '16161616-1616-4161-8161-161616161616',
+  checklist: '17171717-1717-4171-8171-171717171717',
+  tax: '18181818-1818-4181-8181-181818181818',
+  appr: '19191919-1919-4191-8191-191919191919',
+  rate: '20202020-2020-4202-8202-202020202020',
+};
+
+function seed() {
+  return {
+    Locations: [
+      { ID: IDS.locYard, name: 'North Yard', type: 'YARD', address: '1 Harbor Rd', city: 'Houston', plant: 'P1000', active: true, latitude: 29.76, longitude: -95.36 },
+      { ID: IDS.locShop, name: 'Workshop A', type: 'WORKSHOP', address: '2 Repair Ln', city: 'Houston', plant: 'P1000', active: true },
+      { ID: IDS.locP2, name: 'East Yard', type: 'YARD', address: '9 East St', city: 'Dallas', plant: 'P2000', active: true },
+    ],
+    Customers: [
+      {
+        ID: IDS.cust,
+        companyName: 'Gulf Construction LLC',
+        contactPerson: 'Maria Chen',
+        email: 'maria.chen@gulf.example',
+        phone: '+1-713-555-0100',
+        address: '500 Main St, Houston TX',
+        sourceSystem: 'LOCAL',
+        sourceOfTruth: 'LOCAL',
+        plant: 'P1000',
+        active: true,
+      },
+    ],
+    Equipment: [
+      {
+        ID: IDS.eqExc,
+        name: 'Excavator EX-450',
+        type: 'EXCAVATOR',
+        manufacturer: 'Caterpillar',
+        model: '320',
+        serialNumber: 'CAT320-001',
+        purchaseDate: '2022-03-15',
+        defaultDailyRate: 850,
+        currency: 'USD',
+        currentStatus: 'RENTED_OUT',
+        currentLocation_ID: IDS.locYard,
+        plant: 'P1000',
+        version: 1,
+        nextMaintenanceDate: '2026-11-01',
+      },
+      {
+        ID: IDS.eqGen,
+        name: 'Generator GN-90',
+        type: 'GENERATOR',
+        manufacturer: 'Atlas Copco',
+        model: 'QAS90',
+        serialNumber: 'AC90-014',
+        purchaseDate: '2023-01-10',
+        defaultDailyRate: 220,
+        currency: 'USD',
+        currentStatus: 'AVAILABLE',
+        currentLocation_ID: IDS.locYard,
+        plant: 'P1000',
+        version: 1,
+        nextMaintenanceDate: '2026-10-30',
+      },
+    ],
+    Rentals: [
+      {
+        ID: IDS.rental,
+        customer_ID: IDS.cust,
+        rentalDate: '2026-10-20',
+        expectedReturnDate: '2026-10-22',
+        status: 'CHECKED_OUT',
+        currency: 'USD',
+        totalRentalAmount: 2550,
+        dayCountConvention: 'INCLUSIVE_END_DATE',
+        plant: 'P1000',
+        overdue: true,
+      },
+    ],
+    RentalItems: [
+      {
+        ID: IDS.item,
+        rental_ID: IDS.rental,
+        equipment_ID: IDS.eqExc,
+        dailyRentalRate: 850,
+        currency: 'USD',
+        startDate: '2026-10-20',
+        endDate: '2026-10-22',
+        status: 'CHECKED_OUT',
+        checkoutConditionLog_ID: IDS.checkout,
+      },
+    ],
+    InspectionChecklists: [
+      { ID: IDS.checklist, name: 'Standard Return', version: 1, inspectionType: 'CHECK_IN', plant: 'P1000', active: true },
+    ],
+    InspectionChecklistItems: [
+      { ID: '17171717-1717-4171-8171-171717171701', checklist_ID: IDS.checklist, sequence: 1, prompt: 'Hydraulic leaks?', required: true, answerType: 'BOOLEAN', photoRequired: true },
+      { ID: '17171717-1717-4171-8171-171717171702', checklist_ID: IDS.checklist, sequence: 2, prompt: 'Undercarriage wear acceptable?', required: true, answerType: 'BOOLEAN' },
+    ],
+    ConditionLogs: [
+      {
+        ID: IDS.checkout,
+        equipment_ID: IDS.eqExc,
+        rental_ID: IDS.rental,
+        rentalItem_ID: IDS.item,
+        inspectionDateTime: '2026-10-20T14:00:00.000Z',
+        inspectionType: 'CHECK_OUT',
+        conditionGrade: 'B',
+        inspectorID: 'yard',
+        inspectorName: 'Yard Worker',
+        meterReading: 1200,
+        notes: 'Existing scuff on boom',
+        submissionState: 'SUBMITTED',
+        submittedAt: '2026-10-20T14:05:00.000Z',
+        signaturePresent: true,
+        plant: 'P1000',
+      },
+    ],
+    DamageCatalogue: [
+      { ID: '21212121-2121-4212-8212-212121212121', code: 'HYD_HOSE', name: 'Hydraulic hose rupture', severityHint: 'HIGH', photoMin: 2, active: true },
+      { ID: '23232323-2323-4232-8232-232323232323', code: 'COSMETIC', name: 'Cosmetic scratch', severityHint: 'LOW', photoMin: 1, active: true },
+    ],
+    PhotoRequirements: [
+      { ID: '24242424-2424-4242-8242-242424242424', inspectionType: 'CHECK_OUT', minPhotos: 1, blurCheck: true },
+      { ID: '25252525-2525-4252-8252-252525252525', inspectionType: 'CHECK_IN', minPhotos: 2, blurCheck: true },
+    ],
+    TaxRules: [
+      { ID: IDS.tax, name: 'US-DEMO-PENDING-FINANCE', version: 1, plant: 'P1000', currency: 'USD', taxCode: 'DEMO', rate: 0.0, active: true },
+    ],
+    ApprovalRules: [
+      {
+        ID: IDS.appr,
+        name: 'Manual only until Finance threshold',
+        version: 1,
+        plant: 'P1000',
+        currency: 'USD',
+        minAmount: 0,
+        maxAmount: 999999,
+        approverRole: 'BillingClerk',
+        autoApprovalAllowed: false,
+        autoApprovalThreshold: null,
+        active: true,
+      },
+    ],
+    RateCardRules: [
+      { ID: IDS.rate, name: 'Default USD', version: 1, plant: 'P1000', currency: 'USD', laborRate: 140, partsMarkup: 0.15, minimumCharge: 50, active: true, validFrom: '2026-01-01' },
+    ],
+    AppUsers: [
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000001', username: 'manager', displayName: 'Maya Manager', passwordHash: hashPassword('manager'), role: 'Manager', plant: 'P1000', active: true, email: 'maya.manager@demo.local' },
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000002', username: 'maria.yard', displayName: 'Maria Yard', passwordHash: hashPassword('Yard#maria'), role: 'YardWorker', plant: 'P1000', active: true, email: 'maria.yard@demo.local' },
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000003', username: 'dan.dispatch', displayName: 'Dan Dispatcher', passwordHash: hashPassword('Disp#dan'), role: 'Dispatcher', plant: 'P1000', active: true, email: 'dan.dispatch@demo.local' },
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000004', username: 'tom.tech', displayName: 'Tom Technician', passwordHash: hashPassword('Tech#tom'), role: 'Technician', plant: 'P1000', active: true, email: 'tom.tech@demo.local' },
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000005', username: 'bella.billing', displayName: 'Bella Billing', passwordHash: hashPassword('Bill#bella'), role: 'BillingClerk', plant: 'P1000', active: true, email: 'bella.billing@demo.local' },
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000006', username: 'avi.admin', displayName: 'Avi Admin', passwordHash: hashPassword('Admin#avi'), role: 'Admin', plant: '*', active: true, email: 'avi.admin@demo.local' },
+      { ID: 'aaaaaaaa-0001-4000-8000-000000000007', username: 'omar.audit', displayName: 'Omar Auditor', passwordHash: hashPassword('Audit#omar'), role: 'Auditor', plant: 'P1000', active: true, email: 'omar.audit@demo.local' },
+    ],
+  };
+}
+
+module.exports = { IDS, seed };

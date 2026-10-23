@@ -1,0 +1,24 @@
+{
+  "_version": "1.59.0",
+  "sap.app": {
+    "id": "rental.fleet",
+    "type": "application",
+    "title": "Fleet Overview",
+    "dataSources": {
+      "main": {
+        "uri": "/odata/v4/rental/",
+        "type": "OData",
+        "settings": { "odataVersion": "4.0" }
+      }
+    }
+  },
+  "sap.ui5": {
+    "flexEnabled": true,
+    "dependencies": { "minUI5Version": "1.136.0", "libs": { "sap.fe.templates": {} } },
+    "models": { "": { "dataSource": "main" } }
+  },
+  "sap.ui.generic.app": {},
+  "sap.fe": {
+    "entityType": "rental.equipment.Equipment"
+  }
+}

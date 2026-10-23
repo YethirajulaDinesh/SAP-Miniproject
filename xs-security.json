@@ -1,0 +1,31 @@
+{
+  "xsappname": "rental-equipment-tracking",
+  "tenant-mode": "dedicated",
+  "scopes": [
+    { "name": "$XSAPPNAME.YardWorker", "description": "Yard worker" },
+    { "name": "$XSAPPNAME.Dispatcher", "description": "Dispatcher" },
+    { "name": "$XSAPPNAME.Technician", "description": "Technician" },
+    { "name": "$XSAPPNAME.BillingClerk", "description": "Billing clerk" },
+    { "name": "$XSAPPNAME.Manager", "description": "Manager" },
+    { "name": "$XSAPPNAME.Admin", "description": "Admin" },
+    { "name": "$XSAPPNAME.Auditor", "description": "Auditor read-only" }
+  ],
+  "role-templates": [
+    { "name": "YardWorker", "scope-references": ["$XSAPPNAME.YardWorker"] },
+    { "name": "Dispatcher", "scope-references": ["$XSAPPNAME.Dispatcher"] },
+    { "name": "Technician", "scope-references": ["$XSAPPNAME.Technician"] },
+    { "name": "BillingClerk", "scope-references": ["$XSAPPNAME.BillingClerk"] },
+    { "name": "Manager", "scope-references": ["$XSAPPNAME.Manager"] },
+    { "name": "Admin", "scope-references": ["$XSAPPNAME.Admin"] },
+    { "name": "Auditor", "scope-references": ["$XSAPPNAME.Auditor"] }
+  ],
+  "role-collections": [
+    { "name": "Rental_YardWorker", "role-template-references": ["$XSAPPNAME.YardWorker"] },
+    { "name": "Rental_Dispatcher", "role-template-references": ["$XSAPPNAME.Dispatcher"] },
+    { "name": "Rental_Technician", "role-template-references": ["$XSAPPNAME.Technician"] },
+    { "name": "Rental_BillingClerk", "role-template-references": ["$XSAPPNAME.BillingClerk"] },
+    { "name": "Rental_Manager", "role-template-references": ["$XSAPPNAME.Manager"] },
+    { "name": "Rental_Admin", "role-template-references": ["$XSAPPNAME.Admin"] },
+    { "name": "Rental_Auditor", "role-template-references": ["$XSAPPNAME.Auditor"] }
+  ]
+}

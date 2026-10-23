@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Rental Equipment — Back Office</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --sapBrand:#0a6ed1; --sapBg:#f5f6f7; --sapTile:#fff; --sapText:#32363a; --sapCrit:#bb0000; --sapGood:#107e3e; }
+    body { margin:0; font-family:"72","Segoe UI",sans-serif; background:var(--sapBg); color:var(--sapText); }
+    header { background:#354a5f; color:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; }
+    nav { padding:10px 20px; background:#fff; display:flex; flex-wrap:wrap; gap:6px; }
+    button { background:var(--sapBrand); color:#fff; border:0; padding:8px 12px; border-radius:4px; cursor:pointer; }
+    button.secondary { background:#fff; color:var(--sapBrand); border:1px solid var(--sapBrand); }
+    button.danger { background:var(--sapCrit); }
+    main { padding:16px 20px 48px; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:12px 0 20px; }
+    .kpi, .facet, .card { background:var(--sapTile); padding:16px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .kpi b { font-size:28px; display:block; }
+    table { width:100%; border-collapse:collapse; background:#fff; }
+    th, td { padding:8px 10px; border-bottom:1px solid #e5e5e5; text-align:left; font-size:14px; }
+    .muted { color:#6a6d70; font-size:12px; }
+    .banner { background:#fff4e5; padding:8px 12px; margin:8px 0; border-left:4px solid #e9730c; }
+    .ok { color:var(--sapGood); } .bad { color:var(--sapCrit); }
+    input, select, textarea { padding:6px; margin:4px 0 8px; width:100%; box-sizing:border-box; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 16px; }
+    .login { max-width:380px; margin:80px auto; background:#fff; padding:28px; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.12); }
+    .hidden { display:none; }
+    #busy { position:fixed; top:0; left:0; right:0; height:3px; background:var(--sapBrand); transform:scaleX(0); transform-origin:left; }
+    #busy.on { transform:scaleX(1); transition: transform .4s; }
+  </style>
+</head>
+<body>
+<div id="busy"></div>
+<div id="loginView" class="login">
+  <h1>Sign in</h1>
+  <p class="muted">Individual account. Backend enforces role and plant.</p>
+  <label>Username <input id="userName" autocomplete="username" /></label>
+  <label>Password <input id="userPass" type="password" autocomplete="current-password" /></label>
+  <button id="loginBtn">Sign in</button>
+  <p id="loginErr" class="bad"></p>
+  <p class="muted">Dev accounts: manager / manager · maria.yard / Yard#maria · dan.dispatch / Disp#dan · tom.tech / Tech#tom · bella.billing / Bill#bella · avi.admin / Admin#avi · omar.audit / Audit#omar</p>
+</div>
+<div id="appView" class="hidden">
+  <header>
+    <div><strong>Rental Equipment Tracking</strong> <span class="muted" id="roleLabel"></span></div>
+    <div><span id="who"></span> <button class="secondary" id="logoutBtn">Sign out</button></div>
+  </header>
+  <nav id="nav"></nav>
+  <main id="app">Loading…</main>
+</div>
+<script>
+const NAV = {
+  YardWorker: [['inspect','Inspections'],['fleet','My yard fleet'],['photos','Photos']],
+  Dispatcher: [['fleet','Fleet'],['rentals','Rentals'],['customers','Customers'],['overdue','Overdue'],['inspect','Inspections']],
+  Technician: [['repairs','Repair jobs'],['maint','Maintenance'],['fleet','Fleet']],
+  BillingClerk: [['charges','Charge approval'],['bill','Repair bills'],['customers','Customers']],
+  Manager: [['dash','Dashboard'],['fleet','Fleet'],['rentals','Rentals'],['customers','Customers'],['inspect','Inspections'],['charges','Charges'],['repairs','Repairs'],['maint','Maintenance'],['bill','Bills']],
+  Admin: [['users','Users'],['config','Configuration'],['monitor','Integration'],['fleet','Fleet'],['customers','Customers']],
+  Auditor: [['audit','Audit log'],['fleet','Fleet'],['rentals','Rentals'],['inspect','Inspections'],['charges','Charges'],['monitor','Integration']],
+};
+let me = null, token = null, route = null, selectedEq = null, busy = 0;
+const $ = (s) => document.querySelector(s);
+function banner() {
+  return `<div class="banner">INTEGRATION_MODE=${'mock'}. SAP postings are MOCK/SIMULATED until destinations exist. Permissions are enforced on the server.</div>`;
+}
+function setBusy(on) { $('#busy').classList.toggle('on', on); }
+async function api(path, opts={}) {
+  setBusy(true);
+  try {
+    const headers = { 'Accept':'application/json', ...(opts.headers||{}) };
+    if (!(opts.body instanceof ArrayBuffer) && !(opts.body instanceof Uint8Array) && opts.body && !(opts.body instanceof Blob)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
+    if (token) headers.Authorization = 'Bearer ' + token;
+    const res = await fetch(path, { credentials:'include', ...opts, headers });
+    const text = await res.text();
+    let data; try { data = text ? JSON.parse(text) : {}; } catch { data = { raw:text }; }
+    if (!res.ok) throw new Error((data.error && (data.error.message || data.error.code)) || res.status);
+    return data;
+  } finally { setBusy(false); }
+}
+const odata = (p, o) => api(p, o);
+function showApp() {
+  $('#loginView').classList.add('hidden');
+  $('#appView').classList.remove('hidden');
+  $('#who').textContent = `${me.displayName || me.username} · ${me.role} · plant ${me.plant}`;
+  $('#roleLabel').textContent = me.role + ' workspace';
+  const items = NAV[me.role] || NAV.Manager;
+  $('#nav').innerHTML = items.map(([id,label]) => `<button data-route="${id}">${label}</button>`).join('');
+  $('#nav').onclick = (e) => { if (e.target.dataset.route) { route = e.target.dataset.route; paint(); } };
+  route = items[0][0];
+  paint();
+}
+async function login() {
+  $('#loginErr').textContent = '';
+  try {
+    const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username: $('#userName').value, password: $('#userPass').value }) });
+    me = data.user; token = data.token; sessionStorage.setItem('re_token', token);
+    showApp();
+  } catch (e) { $('#loginErr').textContent = e.message; }
+}
+async function restore() {
+  token = sessionStorage.getItem('re_token');
+  try {
+    const data = await api('/api/auth/me');
+    me = data.user; showApp();
+  } catch { $('#loginView').classList.remove('hidden'); }
+}
+$('#loginBtn').onclick = login;
+$('#userPass').addEventListener('keydown', (e) => { if (e.key==='Enter') login(); });
+$('#logoutBtn').onclick = async () => { await api('/api/auth/logout', { method:'POST' }); sessionStorage.removeItem('re_token'); location.reload(); };
+
+function formVal(id) { return document.getElementById(id).value; }
+async function paint() {
+  const el = $('#app');
+  el.innerHTML = '<p>Loading…</p>';
+  try {
+    if (route==='fleet') await fleet();
+    else if (route==='customers') await customers();
+    else if (route==='rentals') await rentals();
+    else if (route==='overdue') await overdue();
+    else if (route==='inspect') await inspect();
+    else if (route==='photos') await photos();
+    else if (route==='charges') await charges();
+    else if (route==='repairs') await repairs();
+    else if (route==='maint') await maint();
+    else if (route==='config') await config();
+    else if (route==='monitor') await monitor();
+    else if (route==='dash') await dash();
+    else if (route==='bill') await bills();
+    else if (route==='users') await users();
+    else if (route==='audit') await audit();
+    else el.innerHTML = banner() + '<p>Unknown screen</p>';
+  } catch (e) { el.innerHTML = banner() + `<p class="bad">${e.message}</p>`; }
+}
+
+async function fleet() {
+  const data = await odata('/odata/v4/rental/Equipment?$count=true&$orderby=name');
+  const eq = data.value || [];
+  selectedEq = selectedEq || eq[0];
+  const k = {}; eq.forEach(e => k[e.currentStatus]=(k[e.currentStatus]||0)+1);
+  $('#app').innerHTML = banner() + `<h1>Fleet</h1>
+    <div class="kpis">
+      <div class="kpi"><span>Available</span><b>${k.AVAILABLE||0}</b></div>
+      <div class="kpi"><span>Rented</span><b>${k.RENTED_OUT||0}</b></div>
+      <div class="kpi"><span>Quarantined</span><b>${k.QUARANTINED||0}</b></div>
+      <div class="kpi"><span>In repair</span><b>${k.IN_REPAIR||0}</b></div>
+    </div>
+    <table><thead><tr><th>Serial</th><th>Name</th><th>Status</th><th>Plant</th><th></th></tr></thead>
+    <tbody>${eq.map(e=>`<tr><td>${e.serialNumber}</td><td>${e.name}</td><td>${e.currentStatus}</td><td>${e.plant}</td>
+      <td><button class="secondary open" data-id="${e.ID}">Open</button></td></tr>`).join('')||'<tr><td>No equipment in your plant</td></tr>'}</tbody></table>
+    <div id="asset"></div>`;
+  $('#app').querySelectorAll('.open').forEach(b => b.onclick = () => asset(b.dataset.id));
+  if (selectedEq) asset(selectedEq.ID);
+}
+async function asset(id) {
+  selectedEq = { ID:id };
+  const eq = await odata(`/odata/v4/rental/Equipment(${id})?$expand=currentLocation`);
+  const logs = await odata(`/odata/v4/condition/ConditionLogs?$filter=equipment_ID eq ${id}`);
+  const locs = await odata('/odata/v4/rental/Locations');
+  const box = document.getElementById('asset') || $('#app');
+  const target = document.getElementById('asset') || document.createElement('div');
+  if (!document.getElementById('asset')) $('#app').appendChild(target);
+  target.id = 'asset';
+  target.innerHTML = `<div class="facet"><h2>${eq.serialNumber} · ${eq.name}</h2>
+    <p>${eq.currentStatus} · ${eq.currentLocation?.name||''} · ${eq.manufacturer} ${eq.model}</p>
+    <h3>Inspections</h3>${(logs.value||[]).map(l=>`<div>${l.inspectionType} ${l.conditionGrade} ${l.submissionState}</div>`).join('')||'<em>None</em>'}
+    <label>Transfer to <select id="toLoc">${(locs.value||[]).map(l=>`<option value="${l.ID}">${l.name}</option>`).join('')}</select></label>
+    <input id="xferReason" placeholder="Reason (required)" />
+    <button id="xfer">Transfer</button></div>`;
+  document.getElementById('xfer').onclick = async () => {
+    await odata('/odata/v4/rental/transferLocation', { method:'POST', body: JSON.stringify({ equipmentID: id, toLocationID: formVal('toLoc'), reason: formVal('xferReason'), clientOperationID: crypto.randomUUID() }) });
+    paint();
+  };
+}
+
+async function customers() {
+  const data = await odata('/odata/v4/rental/Customers?$orderby=companyName');
+  $('#app').innerHTML = banner() + `<h1>Customers</h1>
+    <div class="facet form-grid">
+      <input id="cName" placeholder="Company" />
+      <input id="cContact" placeholder="Contact" />
+      <input id="cEmail" placeholder="Email" />
+      <input id="cPhone" placeholder="Phone" />
+      <input id="cAddr" placeholder="Address" />
+    </div>
+    <button id="cSave">Create customer</button>
+    <table><thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Plant</th></tr></thead>
+    <tbody>${(data.value||[]).map(c=>`<tr><td>${c.companyName}</td><td>${c.contactPerson||''}</td><td>${c.email||''}</td><td>${c.plant||''}</td></tr>`).join('')||'<tr><td>No customers</td></tr>'}</tbody></table>`;
+  document.getElementById('cSave').onclick = async () => {
+    await odata('/odata/v4/rental/Customers', { method:'POST', body: JSON.stringify({ companyName: formVal('cName'), contactPerson: formVal('cContact'), email: formVal('cEmail'), phone: formVal('cPhone'), address: formVal('cAddr'), plant: me.plant==='*'?'P1000':me.plant, sourceOfTruth:'LOCAL', active:true }) });
+    paint();
+  };
+}
+
+async function rentals() {
+  const [rs, cs, eq] = await Promise.all([
+    odata('/odata/v4/rental/Rentals?$expand=customer,items&$orderby=rentalDate desc'),
+    odata('/odata/v4/rental/Customers'),
+    odata('/odata/v4/rental/Equipment'),
+  ]);
+  $('#app').innerHTML = banner() + `<h1>Rentals</h1>
+    <div class="facet">
+      <h3>New rental</h3>
+      <div class="form-grid">
+        <select id="rCust">${(cs.value||[]).map(c=>`<option value="${c.ID}">${c.companyName}</option>`).join('')}</select>
+        <input id="rStart" type="date" />
+        <input id="rEnd" type="date" />
+      </div>
+      <button id="rCreate">Create draft</button>
+    </div>
+    ${(rs.value||[]).map(r => `<div class="facet" data-rid="${r.ID}">
+      <strong>${r.customer?.companyName||r.customer_ID}</strong> · ${r.status} · ${r.rentalDate} → ${r.expectedReturnDate} · ${r.totalRentalAmount} ${r.currency}
+      <div>Items: ${(r.items||[]).map(i=>i.equipment_ID).join(', ')||'none'}</div>
+      <select class="addEq">${(eq.value||[]).map(e=>`<option value="${e.ID}">${e.serialNumber} (${e.currentStatus})</option>`).join('')}</select>
+      <button class="secondary addItem">Add item</button>
+      <button class="book">Book</button>
+      <button class="close">Close</button>
+      <button class="danger cancel">Cancel</button>
+    </div>`).join('')||'<p>No rentals</p>'}`;
+  document.getElementById('rCreate').onclick = async () => {
+    await odata('/odata/v4/rental/createRental', { method:'POST', body: JSON.stringify({ customerID: formVal('rCust'), rentalDate: formVal('rStart'), expectedReturnDate: formVal('rEnd'), plant: me.plant==='*'?'P1000':me.plant }) });
+    paint();
+  };
+  $('#app').querySelectorAll('.facet[data-rid]').forEach(box => {
+    const id = box.dataset.rid;
+    box.querySelector('.addItem').onclick = async () => {
+      await odata('/odata/v4/rental/addRentalItem', { method:'POST', body: JSON.stringify({ rentalID: id, equipmentID: box.querySelector('.addEq').value, startDate: formVal('rStart')||undefined, endDate: formVal('rEnd')||undefined }) });
+      paint();
+    };
+    box.querySelector('.book').onclick = async () => { await odata('/odata/v4/rental/bookRental', { method:'POST', body: JSON.stringify({ rentalID: id }) }); paint(); };
+    box.querySelector('.close').onclick = async () => { await odata('/odata/v4/rental/closeRental', { method:'POST', body: JSON.stringify({ rentalID: id }) }); paint(); };
+    box.querySelector('.cancel').onclick = async () => {
+      const reason = prompt('Cancel reason'); if (!reason) return;
+      await odata('/odata/v4/rental/cancelRental', { method:'POST', body: JSON.stringify({ rentalID: id, reason }) }); paint();
+    };
+  });
+}
+
+async function overdue() {
+  const rs = await odata('/odata/v4/rental/Rentals?$filter=status ne \'CLOSED\' and status ne \'CANCELLED\'');
+  const rows = (rs.value||[]).filter(r => r.overdue || (r.expectedReturnDate && !r.actualReturnDate && r.expectedReturnDate < new Date().toISOString().slice(0,10)));
+  $('#app').innerHTML = banner() + `<h1>Overdue returns</h1>
+    <table><tbody>${rows.map(r=>`<tr><td>${r.ID}</td><td>${r.expectedReturnDate}</td><td>${r.status}</td></tr>`).join('')||'<tr><td>None overdue</td></tr>'}</tbody></table>`;
+}
+
+async function inspect() {
+  const [items, logs] = await Promise.all([
+    odata('/odata/v4/rental/RentalItems?$expand=equipment,rental'),
+    odata('/odata/v4/condition/ConditionLogs?$expand=damages&$orderby=inspectionDateTime desc'),
+  ]);
+  $('#app').innerHTML = banner() + `<h1>Inspections</h1>
+    <div class="facet form-grid">
+      <select id="iItem">${(items.value||[]).map(i=>`<option value="${i.ID}|${i.equipment_ID}">${i.equipment?.serialNumber||i.equipment_ID} · item ${i.status}</option>`).join('')}</select>
+      <select id="iType"><option>CHECK_OUT</option><option>CHECK_IN</option><option>PERIODIC</option><option>POST_MAINTENANCE</option></select>
+      <select id="iGrade"><option>A</option><option>B</option><option>C</option><option>D</option></select>
+      <input id="iMeter" placeholder="Meter" />
+      <input id="iNotes" placeholder="Notes" />
+    </div>
+    <button id="iStart">Start inspection</button>
+    <div id="iWork"></div>
+    <h3>History</h3>
+    <table><tbody>${(logs.value||[]).map(l=>`<tr><td>${l.inspectionType}</td><td>${l.conditionGrade}</td><td>${l.submissionState}</td><td>${(l.damages||[]).length} damage</td></tr>`).join('')}</tbody></table>`;
+  document.getElementById('iStart').onclick = async () => {
+    const [rentalItemID, equipmentID] = formVal('iItem').split('|');
+    const started = await odata('/odata/v4/condition/startInspection', { method:'POST', body: JSON.stringify({ equipmentID, rentalItemID, inspectionType: formVal('iType'), clientOperationID: crypto.randomUUID() }) });
+    document.getElementById('iWork').innerHTML = `<div class="facet"><p>Draft ${started.ID}</p>
+      <input type="file" id="iPhoto" accept="image/jpeg,image/png" />
+      <button id="iUp">Upload photo</button>
+      <input id="dType" placeholder="Damage type" />
+      <input id="dDesc" placeholder="Description" />
+      <select id="dNew"><option value="true">New vs checkout</option><option value="false">Pre-existing / not new</option></select>
+      <button id="dAdd">Record damage</button>
+      <button id="iSubmit">Submit inspection</button>
+      <p id="iMsg" class="ok"></p></div>`;
+    document.getElementById('iUp').onclick = async () => {
+      const f = document.getElementById('iPhoto').files[0];
+      if (!f) return;
+      const init = await api('/api/media/initiate', { method:'POST', body: JSON.stringify({ fileName: f.name, mimeType: f.type, byteSize: f.size, conditionLogID: started.ID, photoCategory:'OVERALL' }) });
+      await fetch('/api/media/upload/' + init.uploadID, { method:'PUT', credentials:'include', headers: { Authorization: 'Bearer '+token }, body: await f.arrayBuffer() });
+      await api('/api/media/finalize', { method:'POST', body: JSON.stringify({ uploadID: init.uploadID, conditionLogID: started.ID, fileName: f.name }) });
+      document.getElementById('iMsg').textContent = 'Photo stored';
+    };
+    document.getElementById('dAdd').onclick = async () => {
+      await odata('/odata/v4/condition/recordDamage', { method:'POST', body: JSON.stringify({ inspectionID: started.ID, damageType: formVal('dType'), description: formVal('dDesc'), severity:'MEDIUM', newDamageComparedToCheckout: formVal('dNew')==='true' }) });
+      document.getElementById('iMsg').textContent = 'Damage recorded (liability still pending review)';
+    };
+    document.getElementById('iSubmit').onclick = async () => {
+      await odata('/odata/v4/condition/submitInspection', { method:'POST', body: JSON.stringify({ inspectionID: started.ID, grade: formVal('iGrade'), meterReading: Number(formVal('iMeter')||0), notes: formVal('iNotes'), signaturePresent: true, clientOperationID: crypto.randomUUID() }) });
+      paint();
+    };
+  };
+}
+
+async function photos() {
+  const media = await odata('/odata/v4/damage/MediaAssets');
+  $('#app').innerHTML = banner() + `<h1>Evidence photos</h1>
+    <table><tbody>${(media.value||[]).map(m=>`<tr><td>${m.originalFileName}</td><td>${m.photoCategory}</td><td>${m.sha256?.slice(0,12)||''}</td><td>${m.uploadState}</td></tr>`).join('')||'<tr><td>No photos yet</td></tr>'}</tbody></table>`;
+}
+
+async function charges() {
+  const [dmgs, bills] = await Promise.all([
+    odata('/odata/v4/damage/DamageRecords'),
+    odata('/odata/v4/damage/RepairBills'),
+  ]);
+  $('#app').innerHTML = banner() + `<h1>Damage charges</h1>
+    <p class="muted">Pre-existing damage cannot be billed. Totals are calculated on the server.</p>
+    <h3>Damages</h3>
+    <table><tbody>${(dmgs.value||[]).map(d=>`<tr><td>${d.damageType}</td><td>${d.liabilityState}</td><td>${d.newDamageComparedToCheckout}</td>
+      <td><button class="secondary liab" data-id="${d.ID}">Confirm liability</button>
+          <button class="req" data-id="${d.ID}">Request approval</button></td></tr>`).join('')||'<tr><td>None</td></tr>'}</tbody></table>
+    <h3>Bills</h3>
+    <table><tbody>${(bills.value||[]).map(b=>`<tr><td>${b.billingStatus}</td><td>${b.totalAmount} ${b.currency}</td><td>${b.simulated?'MOCK':b.externalDocumentID||''}</td>
+      <td><button class="appr" data-id="${b.ID}">Approve</button>
+          <button class="danger rej" data-id="${b.ID}">Reject</button>
+          <button class="post" data-id="${b.ID}">Post</button></td></tr>`).join('')||'<tr><td>None</td></tr>'}</tbody></table>`;
+  const act = (sel, fn) => $('#app').querySelectorAll(sel).forEach(b => b.onclick = () => fn(b.dataset.id));
+  act('.liab', async (id) => {
+    const st = prompt('CUSTOMER_LIABLE or NOT_CUSTOMER_LIABLE','CUSTOMER_LIABLE');
+    const reason = prompt('Reason','Reviewed against checkout baseline');
+    await odata('/odata/v4/damage/confirmLiability', { method:'POST', body: JSON.stringify({ damageID:id, liabilityState:st, newDamageComparedToCheckout: st==='CUSTOMER_LIABLE', reason }) });
+    paint();
+  });
+  act('.req', async (id) => { await odata('/odata/v4/damage/requestApproval', { method:'POST', body: JSON.stringify({ damageID:id }) }); paint(); });
+  act('.appr', async (id) => { const reason=prompt('Approval reason'); if(!reason) return; await odata('/odata/v4/damage/approveCharge', { method:'POST', body: JSON.stringify({ billID:id, reason }) }); paint(); });
+  act('.rej', async (id) => { const reason=prompt('Reject reason'); if(!reason) return; await odata('/odata/v4/damage/rejectCharge', { method:'POST', body: JSON.stringify({ billID:id, reason }) }); paint(); });
+  act('.post', async (id) => { await odata('/odata/v4/damage/postCharge', { method:'POST', body: JSON.stringify({ billID:id }) }); paint(); });
+}
+
+async function repairs() {
+  const rows = await odata('/odata/v4/maintenance/MaintenanceRecords');
+  const eq = await odata('/odata/v4/rental/Equipment');
+  $('#app').innerHTML = banner() + `<h1>Repair jobs</h1>
+    <select id="rjEq">${(eq.value||[]).map(e=>`<option value="${e.ID}">${e.serialNumber}</option>`).join('')}</select>
+    <input id="rjDesc" placeholder="Description" />
+    <button id="rjMk">Create job</button>
+    <table><tbody>${(rows.value||[]).map(r=>`<tr><td>${r.maintenanceType}</td><td>${r.status}</td><td>${r.assignedTechnician||''}</td>
+      <td><button class="asg" data-id="${r.ID}">Assign me</button>
+          <button class="done" data-id="${r.ID}">Complete</button></td></tr>`).join('')||'<tr><td>No jobs</td></tr>'}</tbody></table>`;
+  document.getElementById('rjMk').onclick = async () => {
+    await odata('/odata/v4/maintenance/createRepairJob', { method:'POST', body: JSON.stringify({ equipmentID: formVal('rjEq'), description: formVal('rjDesc') }) }); paint();
+  };
+  $('#app').querySelectorAll('.asg').forEach(b => b.onclick = async () => {
+    await odata('/odata/v4/maintenance/assignTechnician', { method:'POST', body: JSON.stringify({ maintenanceID: b.dataset.id, technicianID: me.username }) }); paint();
+  });
+  $('#app').querySelectorAll('.done').forEach(b => b.onclick = async () => {
+    await odata('/odata/v4/maintenance/completeRepair', { method:'POST', body: JSON.stringify({ maintenanceID: b.dataset.id }) }); paint();
+  });
+}
+
+async function maint() {
+  const rows = await odata('/odata/v4/maintenance/MaintenanceRecords?$orderby=date desc');
+  $('#app').innerHTML = banner() + `<h1>Maintenance planner</h1>
+    <table><thead><tr><th>Type</th><th>Date</th><th>Next</th><th>Status</th><th>Cost</th></tr></thead>
+    <tbody>${(rows.value||[]).map(r=>`<tr><td>${r.maintenanceType}</td><td>${r.date}</td><td>${r.nextMaintenanceDate||'-'}</td><td>${r.status}</td><td>${r.cost||''}</td></tr>`).join('')||'<tr><td>None</td></tr>'}</tbody></table>`;
+}
+
+async function config() {
+  const [tax, appr] = await Promise.all([odata('/odata/v4/integration/TaxRules'), odata('/odata/v4/integration/ApprovalRules')]);
+  $('#app').innerHTML = banner() + `<h1>Configuration</h1>
+    <p>Tax and auto-approval remain fail-closed until Finance provides values.</p>
+    <pre>${JSON.stringify({ tax: tax.value, approval: appr.value }, null, 2)}</pre>`;
+}
+
+async function monitor() {
+  const ob = await odata('/odata/v4/integration/IntegrationOutbox');
+  $('#app').innerHTML = banner() + `<h1>Integration monitor</h1>
+    <button id="sync">On-demand mock sync</button>
+    <table><tbody>${(ob.value||[]).map(r=>`<tr><td>${r.eventType}</td><td>${r.status}</td><td>${r.externalID||''} ${r.simulated?'MOCK':''}</td>
+      <td><button class="secondary rec" data-id="${r.ID}">Reconcile</button></td></tr>`).join('')||'<tr><td>Queue empty</td></tr>'}</tbody></table>`;
+  document.getElementById('sync').onclick = async () => { await odata('/odata/v4/integration/runMasterDataSync', { method:'POST', body: JSON.stringify({ syncType:'ALL' }) }); paint(); };
+  $('#app').querySelectorAll('.rec').forEach(b => b.onclick = async () => { await odata('/odata/v4/integration/reconcileMessage', { method:'POST', body: JSON.stringify({ outboxID: b.dataset.id }) }); paint(); });
+}
+
+async function dash() {
+  const [eq, bills, rs] = await Promise.all([
+    odata('/odata/v4/analytics/Equipment'),
+    odata('/odata/v4/analytics/RepairBills'),
+    odata('/odata/v4/analytics/Rentals'),
+  ]);
+  $('#app').innerHTML = banner() + `<h1>Management dashboard</h1>
+    <div class="kpis">
+      <div class="kpi"><span>Assets</span><b>${(eq.value||[]).length}</b></div>
+      <div class="kpi"><span>Open rentals</span><b>${(rs.value||[]).filter(r=>!['CLOSED','CANCELLED'].includes(r.status)).length}</b></div>
+      <div class="kpi"><span>Bills</span><b>${(bills.value||[]).length}</b></div>
+    </div>`;
+}
+
+async function bills() {
+  const rows = await odata('/odata/v4/damage/RepairBills');
+  $('#app').innerHTML = banner() + `<h1>Repair bills</h1>
+    ${(rows.value||[]).map(b=>`<div class="facet">${b.billingStatus} · ${b.totalAmount} ${b.currency} · ${b.simulated?'MOCK/SIMULATED':''}<pre>${b.calculationSnapshot||''}</pre></div>`).join('')||'<p>No bills</p>'}`;
+}
+
+async function users() {
+  const rows = await odata('/odata/v4/identity/AppUsers');
+  $('#app').innerHTML = banner() + `<h1>Users</h1>
+    <div class="form-grid">
+      <input id="uName" placeholder="username" />
+      <input id="uDisp" placeholder="display name" />
+      <input id="uPass" placeholder="password" type="password" />
+      <select id="uRole"><option>YardWorker</option><option>Dispatcher</option><option>Technician</option><option>BillingClerk</option><option>Manager</option><option>Admin</option><option>Auditor</option></select>
+      <input id="uPlant" placeholder="plant" value="P1000" />
+    </div>
+    <button id="uAdd">Create user</button>
+    <table><tbody>${(rows.value||[]).map(u=>`<tr><td>${u.username}</td><td>${u.role}</td><td>${u.plant}</td><td>${u.active}</td>
+      <td><button class="secondary tog" data-id="${u.ID}" data-a="${u.active}">${u.active?'Deactivate':'Activate'}</button></td></tr>`).join('')}</tbody></table>`;
+  document.getElementById('uAdd').onclick = async () => {
+    await odata('/odata/v4/identity/createUser', { method:'POST', body: JSON.stringify({ username: formVal('uName'), displayName: formVal('uDisp'), password: formVal('uPass'), role: formVal('uRole'), plant: formVal('uPlant') }) });
+    paint();
+  };
+  $('#app').querySelectorAll('.tog').forEach(b => b.onclick = async () => {
+    await odata('/odata/v4/identity/setUserActive', { method:'POST', body: JSON.stringify({ userID: b.dataset.id, active: b.dataset.a !== 'true' }) }); paint();
+  });
+}
+
+async function audit() {
+  const rows = await odata('/odata/v4/integration/AuditEvents?$orderby=occurredAt desc&$top=50');
+  $('#app').innerHTML = banner() + `<h1>Audit history (read-only)</h1>
+    <table><tbody>${(rows.value||[]).map(a=>`<tr><td>${a.occurredAt}</td><td>${a.actor}</td><td>${a.action}</td><td>${a.entityType}</td><td>${a.reason||''}</td></tr>`).join('')||'<tr><td>Empty</td></tr>'}</tbody></table>`;
+}
+
+restore();
+</script>
+</body>
+</html>

@@ -1,0 +1,538 @@
+Functional Requirement Document – SAP BTP CAP + Fiori
+Rental Equipment Tracking & Condition Logging with Automated Repair Billing in SAP S/4HANA
+Field
+Details
+Project Name
+Rental Equipment Tracking & Condition Logging – HANA Integration
+Version
+1.0
+Date
+08-Oct-26
+Author
+Functional Consultant (name to be confirmed)
+Sponsor
+CFO / COO (to be confirmed)
+Business Owner
+Head of Rental Operations / Fleet Management (to be confirmed)
+Document Revisions
+Date
+Version
+Changes
+08-Oct-26
+0.1
+Initial draft based on business problem statement and developer specification
+08-Oct-26
+1.0
+Structured into the project FRD template for developer hand-over; pending Fit-to-Standard workshop confirmation
+Approvals
+Role
+Name
+Signature
+Date
+Project Sponsor
+TBC
+___
+___
+Business Owner
+TBC
+___
+___
+Project Manager
+TBC
+___
+___
+System Architect
+TBC
+___
+___
+Executive Summary
+Companies that rent out high-value equipment lose revenue because they cannot see where each asset is, which repairs it has had, or what condition it came back in. Damage is described inconsistently, has no photo evidence, and is billed late, disputed, or never billed. This project builds a Rental Equipment Tracking and Condition Logging solution on SAP BTP using the Cloud Application Programming (CAP) Model (Node.js, TypeScript) with an SAP Fiori (Fiori Elements) back-office frontend and a mobile app for yard workers. The mobile app integrates with the device camera so photos of damage are captured at the moment of return and attached to the CAP backend. CAP calculates the repair charge and posts it automatically to SAP HANA for billing.
+Expected Outcomes
+Every asset has one trusted record: status, current location, custodian, and complete maintenance and condition history
+Standardised return inspection with mandatory photo evidence, severity grading and A to D condition grade
+Automated repair charge calculation and approval, with posting to S/4HANA (maintenance notification/order and billing request)
+95% or more of returns with new damage result in a billing document; billing time under 15 minutes (auto-approved) or under 24 hours (approval needed)
+50% fewer disputed damage charges within 6 months; fewer than 2% of assets without a location update in 24 hours
+Scope
+In Scope
+CAP backend service (Node.js/TypeScript) with CDS models, business logic, outbox-based integration
+SAP Fiori Elements back-office apps (List Report, Object Page, Analytical List Page) plus limited freestyle SAPUI5 (map, photo comparison)
+Mobile app (Android/iOS, offline-first) with QR/barcode/NFC scan, in-app camera, inspection wizard, signature capture
+OData v4 services exposed by CAP; REST endpoints for mobile sync and media upload
+SAP HANA Cloud for persistence; SAP BTP Object Store for photos and video
+XSUAA (or IAS) authentication with role-based and plant-based access
+SAP Destination and Connectivity (Cloud Connector for on-premise) to HANA
+HTML5 Application Repository for Fiori app hosting
+Document Information Management (DIM) for generated damage report PDFs and signed documents (7-year retention)
+Integration: equipment, customers and rental contracts from HANA; maintenance notifications, orders and billing requests to HANA; billing status back
+Out of Scope (Release 1)
+Live telematics/IoT tracking (data model is prepared for it)
+AI-based automatic damage detection from photos
+Customer self-service portal
+Architecture Overview
+Figure 1 shows the end-to-end solution. Summary of layers:
+solution architecture · clients, BTP, HANA
+ER-DIAGRAM
+Mobile and Fiori clients call only the CAP service; postings to HANA leave through the outbox worker and the Destination service.
+Layer
+Component
+Role
+Client
+Mobile app (React Native or Flutter, SQLCipher offline store)
+Scan, camera, inspection, offline queue
+Client
+Fiori Launchpad (Work Zone) + Fiori apps
+Back-office, approval, analytics
+BTP
+CAP service (Node.js)
+Business logic, pricing engine, workflow, sync API
+BTP
+SAP HANA Cloud
+Transactional data, history, configuration
+BTP
+Cloudinary
+Photos, video, thumbnails (private, signed URLs)
+BTP
+Cloudinary
+Damage report PDFs, signed documents
+BTP
+Destination, Connectivity, Job Scheduling, Notification, Logging
+Connectivity, 15-minute sync, alerts, logs
+Backend
+SAP HANA (Cloud or on-premise)
+Equipment, customers, contracts, maintenance, billing
+Data Models
+Entity
+Key Fields
+Description
+Customers
+Customer ID, Company Name, Contact Person, Email, Phone, Address
+Stores customer and company information for equipment rentals.
+Rentals
+Rental ID, Customer ID, Rental Date, Expected Return Date, Actual Return Date, Rental Status, Total Rental Amount
+Manages rental transactions and tracks rental lifecycle details.
+Rental Items
+Rental Item ID, Rental ID, Equipment ID, Daily Rental Rate, Start Date, End Date, Item Status
+Stores individual equipment rented as part of a rental transaction.
+Equipment
+Equipment ID, Location ID, Equipment Name, Equipment Type, Manufacturer, Model, Serial Number, Purchase Date, Rental Rate Per Day, Current Status
+Maintains equipment master data and availability information.
+Locations
+Location ID, Location Name, Location Type, Address, City, Latitude, Longitude
+Stores information about equipment storage and operational locations.
+Maintenance Records
+Maintenance ID, Equipment ID, Maintenance Type, Maintenance Date, Description, Service Provider, Cost, Next Maintenance Date, Status
+Tracks maintenance activities performed on equipment.
+Condition Logs
+Condition Log ID, Equipment ID, Rental ID, Inspection Date, Inspection Type, Condition Grade, Inspector Name, Meter Reading, Notes
+Records equipment inspection and condition assessment details.
+Damage Records
+Damage ID, Condition Log ID, Damage Type, Damage Description, Severity, Repair Estimate, Customer Liable, Damage Status
+Captures details of damages identified during inspections.
+Damage Photos
+Photo ID, Damage ID, File Name, Media Type, Photo Content, Uploaded At, Uploaded By
+Stores photographic evidence related to equipment damages.
+Repair Bills
+Repair Bill ID, Rental ID, Customer ID, Damage ID, Bill Date, Repair Amount, Tax Amount, Total Amount, Billing Status
+Manages billing and repair cost information for damaged equipment.
+Service Layer
+Service
+Entities / Actions Exposed
+Annotations
+Authorization
+RentalManagementService
+Customers, Rentals, RentalItems, Equipment, Locations
+@UI.LineItem, @UI.SelectionFields, @UI.HeaderInfo, @Search.searchable
+authenticated-user
+MaintenanceManagementService
+MaintenanceRecords, ConditionLogs
+@UI.LineItem, @UI.FieldGroup, @UI.Facets
+maintenance-team, admin
+DamageManagementService
+DamageRecords, DamagePhotos, RepairBills
+@UI.LineItem, @UI.Facets, @Core.MediaType
+inspector, finance-team, admin
+Functional Requirements
+ID
+Requirement
+Priority
+Acceptance Criteria
+FR-001
+Users can maintain customer master data including company details, contacts, and addresses
+Critical
+Customer records can be created, updated, viewed, and searched successfully
+FR-002
+Users can create and manage rental contracts for customers
+Critical
+Rental records include customer, rental dates, status, and total rental amount
+FR-003
+Users can add multiple equipment items to a rental transaction
+Critical
+One rental can contain multiple rental items with independent rental periods
+FR-004
+System shall maintain equipment master data and current availability status
+Critical
+Equipment details, rates, serial numbers, and status are stored and retrievable
+FR-005
+Yard workers can perform equipment inspections during check-out and return processes
+Critical
+Inspection records capture condition grade, meter reading, inspector details, and notes
+FR-006
+System shall record equipment damages identified during inspections
+Critical
+Damage records include type, severity, description, estimate, and liability information
+FR-007
+System shall generate repair bills and customer charges for damaged equipment
+Critical
+Repair amounts, taxes, totals, and billing status are calculated and stored
+FR-008
+System shall track rental lifecycle from booking to return
+High
+Rental status changes are logged and viewable
+FR-009
+Users can record expected and actual return dates for rentals
+High
+Delayed returns are identified automatically
+FR-010
+System shall support location-based equipment management
+High
+Equipment is assigned to a valid operational location
+FR-011
+Users can transfer equipment between locations
+High
+Transfer history and current location are maintained
+FR-012
+System shall maintain maintenance records for equipment
+Critical
+Maintenance type, provider, cost, and status are recorded
+FR-013
+System shall schedule upcoming maintenance activities
+High
+Next maintenance date is tracked and visible
+FR-014
+System shall store pre-rental and post-rental condition assessments
+High
+Inspection history is available for every equipment item
+FR-015
+System shall classify equipment condition using standard grading
+High
+Condition grades are validated against predefined values
+FR-016
+System shall capture customer liability information for damages
+High
+Liable party is recorded for every damage record
+FR-017
+System shall track damage resolution status
+Critical
+Damage status progresses through defined workflow stages
+FR-018
+Users can upload and manage photographic evidence for damages
+Critical
+Multiple photos can be attached to a damage record
+FR-019
+System shall store photo metadata and upload details
+Moderate
+Uploaded date, file information, and uploader details are maintained
+FR-020
+Users can review damage history for equipment
+Moderate
+Complete damage timeline is displayed per equipment
+FR-021
+System shall maintain repair estimates associated with damages
+Moderate
+Estimated repair costs are stored and editable
+FR-022
+Users can search and filter rentals, customers, and equipment
+Moderate
+Search results return within acceptable response times
+FR-023
+System shall provide rental and equipment utilization reporting
+Moderate
+Reports display rental performance and equipment usage
+FR-024
+System shall provide maintenance cost reporting
+Critical
+Maintenance expenses can be analyzed by equipment and period
+FR-025
+System shall provide billing and damage charge reports
+Critical
+Repair bill status and charges can be viewed and exported
+Fiori UI Requirements
+Screen
+Template
+Key Elements
+Fleet Overview
+Analytical List Page (ALP) + Object Page
+KPI cards (Available, Rented Out, Overdue, Damaged); smart table with filters; drill-down to Asset Object Page
+Asset Detail
+Object Page
+Header (serial, status, location, custodian, next service); facets: General, Timeline, Inspections, Damage, Repairs, Documents, Location History, Media Gallery
+Inspection Review
+Object Page + action
+Photo gallery; check-out versus check-in comparison slider; damage list; audit trail; evidence ZIP download
+Damage Charge Approval
+List Report + Object Page + Actions
+Worklist of pending charges; editable cost lines; Approve / Adjust / Reject / Dispute buttons; mandatory reason on reject and adjust
+Repair Jobs
+List Report + Object Page
+Status filter; assign technician; actuals; before/after photos
+Maintenance Planner
+List Report + calendar
+Upcoming and overdue services
+Configuration
+List Report + Object Pages
+Damage catalogue, checklists, pricing and approval rules, photo requirements, notifications
+Integration Monitor
+List Report
+Outbox messages, status, masked payload, retry button, error reason
+Management Dashboard
+Analytical List Page
+Billing leakage, damage revenue billed versus estimated, utilization, compliance, top damaged categories.
+Integration Requirements
+#
+Source → Target
+Method
+Frequency
+Data
+INT-01
+HANA → CAP
+OData v2 API_EQUIPMENT (via Destination)
+15 min (scheduled) plus on-demand
+Equipment master
+INT-02
+HANA → CAP
+OData API_BUSINESS_PARTNER
+15 min plus on-demand
+Customers, contacts, email
+INT-03
+HANA → CAP
+Sales contract / order APIs (to be confirmed with functional team)
+15 min plus on-demand
+Rental contracts and items
+INT-04
+CAP → HANA
+OData API_MAINTNOTIFICATION
+On-demand (via outbox)
+Maintenance notification per confirmed damage
+INT-05
+CAP ↔ HANA
+OData API_MAINTENANCEORDER
+On-demand, status poll
+Repair order and actual cost
+INT-06
+CAP → HANA
+API_DEBIT_MEMO_REQUEST_SRV or API_SALES_ORDER_SRV (agreed billing type)
+On-demand (via outbox)
+Repair charge lines referencing contract
+INT-07
+HANA → CAP
+API_BILLING_DOCUMENT_SRV poll or Event Mesh events
+15 min or event-driven
+Billing status
+INT-08
+CAP → HANA
+API_CV_ATTACHMENT_SRV, or link to evidence viewer
+On-demand
+Damage report PDF, key photos
+INT-09
+CAP → Cloudinary
+REST API (SAP BTP)
+On-demand
+Damage report PDFs, signed documents
+INT-10
+CAP → Object Store
+S3-compatible API, pre-signed URLs
+On-demand (upload)
+Photos, video, thumbnails
+INT-11
+CAP → SAP Notification / email
+REST API
+On-demand
+Email and in-app notifications
+Destination Configuration
+Destination
+Type
+Target
+Auth
+HANA_PROD
+HTTP
+HANA production host (via Cloud Connector if on-premise)
+OAuth2SAMLBearerAssertion or principal propagation for user actions; technical user for scheduled sync
+HANA_QAS
+HTTP
+HANA QA host
+Same as production, separate service user
+HANA_DEV
+HTTP
+HANA development/sandbox host
+Basic (service user), development only
+Basic authentication is acceptable only in non-production landscapes. Credentials are never stored in code or configuration files.
+Security & Authorization
+Aspect
+Requirement
+Authentication
+OAuth 2.0 via XSUAA (Cloud Foundry); optional SAP Cloud Identity Services (IAS) with OIDC; MFA per customer policy; mobile uses PKCE and secure token storage
+Roles
+YardWorker (scan, inspect, transfer), Dispatcher (check-out, override with reason), Technician (repairs, release quarantine), BillingClerk (approve and dispute charges), Manager (all approvals, dashboards, overrides), Admin (configuration, user management), Auditor (read-only)
+Authorization in CAP
+@requires at service and entity level; instance-based filter on Plant (assets, inspections, charges); price data hidden from YardWorker
+Mobile Security
+Certificate pinning; encrypted local database and file store; remote wipe via token revocation; MDM support
+Data Encryption
+TLS 1.2+ in transit; HANA Cloud and Object Store encryption at rest
+Evidence Integrity
+SHA-256 hash, immutable inspections, signed URLs, versioned bucket, legal-hold flag
+Audit
+All write actions logged (CAP eventing to audit table); immutable and exportable
+Compliance
+GDPR / local data-protection law (retention, subject access, deletion of personal data without deleting financial evidence); OWASP ASVS L2 and MASVS
+Non-Functional Requirements
+ID
+Requirement
+NFR-001
+Response time: ALP initial load under 3 s (95th percentile); API reads under 500 ms; charge calculation under 2 s
+NFR-002
+Concurrent users: 500 mobile and back-office users (peak); 100,000 assets; 5 million media files
+NFR-003
+Availability: 99.5% (business hours); RPO under 1 hour; RTO under 4 hours
+NFR-004
+Data retention: inspection evidence and invoices 7 years (configurable), cold-storage lifecycle after 12 months
+NFR-005
+Compliance: data residency and data-protection requirements per client country (to be confirmed)
+NFR-006
+CI/CD: Git-based pipeline via SAP Continuous Integration & Delivery or GitHub Actions; mobile builds via Fastlane
+NFR-007
+Mobile: Android 10 and iOS 15 minimum; rugged tablets supported; full shift of battery use; capture to thumbnail under 1 s
+NFR-008
+Observability: health endpoints, metrics, tracing, alerts on outbox backlog and failed postings
+NFR-009
+Unit test coverage of at least 80% on business logic
+BTP Services & Resources
+Service
+Plan
+Purpose
+SAP HANA Cloud (DB)
+Standard, size per volume estimate (start 4 GB, review at sizing)
+Primary persistence
+XSUAA (CF) / IAS
+Application
+Authentication and roles
+SAP Destination
+Standard
+Connectivity to HANA
+SAP Connectivity / Cloud Connector
+Standard
+On-premise HANA access
+HTML5 Application Repository
+Standard
+Fiori app hosting
+SAP Object Store
+Per hyperscaler
+Photos, video, thumbnails
+SAP Document Information Management
+Standard
+Damage report PDFs, signed documents
+SAP Job Scheduling Service
+Standard
+15-minute sync and outbox worker
+SAP Alert Notification / Event Mesh
+Standard (optional Event Mesh)
+Notifications and S/4 events
+SAP Cloud Logging
+Standard
+Application logs and tracing
+SAP Build Work Zone
+Standard
+Launchpad
+Cloud Foundry Runtime
+1 GB memory per app (tune after load test)
+CAP service hosting
+Deployment (MTA)
+Module
+Type
+Description
+db
+HANA Cloud DB
+CDS model deployment, migrations
+srv
+Node.js (CAP)
+Backend services: Mobile, BackOffice, Analytics, Integration
+worker
+Node.js (CAP)
+Outbox processor and sync jobs
+ui
+HTML5 (Fiori)
+Back-office Fiori apps
+mta.yaml
+MTA descriptor
+Ties modules and service bindings
+mobile (outside MTA)
+React Native / Flutter
+Separate build pipeline; distribution through MDM or enterprise store
+Landscape: DEV, QAS, PROD, each connected to its own HANA system.
+Testing Strategy
+Phase
+Scope
+Tools
+Unit
+Pricing engine, status matrix, CDS validations, approval routing
+@sap/cds test framework, Jest
+Integration
+OData endpoints, Destination calls with mocked HANA, Object Store upload, DIM, outbox retry and idempotency
+Postman / test.http, WireMock or CAP mock
+UI
+Fiori app flows, responsive, i18n; mobile on real devices including rugged and low-end; offline and online transitions
+Manual, SAP Fiori Test Automation, Appium/Detox
+Performance
+500 concurrent users, photo upload volume
+k6 or JMeter
+Security
+Role and plant enforcement, auth flows, MASVS, penetration test before go-live
+XSUAA tests, SAST/DAST
+UAT
+End-to-end scenarios with yard staff, billing clerks, workshop on QAS; pilot at one yard
+Business users
+Key UAT scenarios
+Offline return inspection with photos and 2 damage items syncs later without duplicates.
+New damage is billed; pre-existing damage is not.
+Charge under threshold is posted to S/4HANA automatically and the document number appears in the asset timeline.
+Charge over threshold is approved and posted exactly once after an HANA timeout and retry.
+HANA outage of 2 hours: inspections continue, outbox drains on recovery, alert raised.
+Role and plant restrictions hold; photo with hash mismatch is rejected.
+Assumptions, Risks and Open Questions
+Item
+Detail
+Owner
+Assumption
+HANA exposes the listed standard OData APIs; rental contracts modelled as sales contracts or orders
+Functional / Architect
+Assumption
+Pricing rate card lives in CAP configuration for release 1, behind an interface to allow S/4 condition records later
+Business Owner
+Risk
+Poor connectivity in yards
+Offline-first design; Wi-Fi check
+Risk
+Duplicate or wrong billing
+Idempotency keys, reference checks, approval thresholds, reconciliation report
+Risk
+Yard workers skip photos
+Mandatory shots, blur detection, KPIs per inspector
+Open
+HANA edition and release; Cloud Connector needed?
+Architect
+Open
+Billing document type and G/L accounts for damage charges
+Finance
+Open
+Approval thresholds and write-off percentage
+Business Owner
+Open
+Does the contract allow loss-of-use billing?
+Legal / Business
+Open
+Device fleet and MDM product; existing asset labels (QR, barcode, NFC)?
+IT / Operations
+Open
+Data residency, retention period, languages and countries at go-live
+Compliance / PMO

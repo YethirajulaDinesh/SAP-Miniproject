@@ -1,0 +1,17 @@
+node_modules/
+db.sqlite
+db.sqlite-shm
+db.sqlite-wal
+*.sqlite
+.media/
+gen/
+dist/
+coverage/
+.env
+default-env.json
+*.log
+.cds/
+.DS_Store
+mobile/node_modules/
+.vscode/
+mta_archives/

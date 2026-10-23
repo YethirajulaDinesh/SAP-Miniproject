@@ -1,0 +1,920 @@
+RENTAL EQUIPMENTTRACKING & CONDITION LOGGING
+Antigravity End-to-End Build Blueprint
+SAP BTP CAP (Node.js + TypeScript) • SAP Fiori Elements • React Native • SAP S/4HANA integration
+Version 1.0  |  23 October 2026
+Derived from the supplied ER diagram and Functional Requirement Document (FRD v1.0 dated 08-Oct-2026).
+Document control
+Item
+Value
+Purpose
+Single implementation specification and master prompt for Google Antigravity to build the complete project in a repository.
+Source artefacts
+Rental Equipment Tracking & Condition Logging ER diagram (image) and Functional Requirement Document – SAP BTP CAP + Fiori v1.0.
+Target stack
+SAP CAP Node.js + TypeScript; OData V4; SAP HANA Cloud; SAP Fiori Elements/SAPUI5; React Native mobile; SAP BTP services; configurable S/4HANA API adapters.
+Implementation principle
+Build a runnable, tested local/demo product first; production SAP connections remain configuration- and customer-landscape-dependent.
+Audience
+Antigravity coding agent, developer, solution architect, functional consultant, SAP integration team, operations, QA/security.
+Status
+Implementation-ready blueprint; open SAP/Finance/Legal/IT decisions are tracked instead of being invented.
+How to use this blueprint
+Attach the source ERD and FRD to the Antigravity workspace and save this document plus the companion Antigravity_Master_Build_Prompt.md in the repository docs/ folder.
+Open the repository root in Antigravity and paste the full “Master build prompt” from the companion Markdown file. Tell the agent to execute it, not merely summarize it or return a plan.
+Allow Antigravity to inspect files, use terminal commands, run tests, start the applications, and use browser verification. Review risky operations before permitting them.
+Expect a fully runnable mock/demo environment when SAP credentials are absent. Real S/4 posting, BTP deployment, corporate identity, production storage, and mobile-store distribution require the customer landscape and secrets.
+Use the decision register in Section 19 to close business/architecture questions before enabling production write operations.
+Important reality checkA single long prompt can coordinate a large build, but it cannot create SAP subaccounts, grant roles, invent credentials, or prove live integrations without access to the target SAP release and tenant. The blueprint requires the agent to implement all local code paths and honest integration seams, then verify every runnable capability.
+Contents
+1. Executive build directive
+2. What the supplied files say
+3. Findings, conflicts and required corrections
+4. Decisions and architecture baseline
+5. Functional scope and role workflows
+6. Data model and ERD extensions
+7. Business rules and state machines
+8. API and service contract
+9. Fiori back-office requirements
+10. Mobile and offline requirements
+11. SAP S/4HANA and BTP integration
+12. Security, audit and privacy
+13. Non-functional requirements
+14. Repository structure and engineering standards
+15. Testing and acceptance matrix
+16. Delivery phases and quality gates
+17. Configuration, deployment and operations
+18. Antigravity execution protocol
+19. Open decisions / questions
+20. Copy-paste master build prompt
+21. Authoritative reference links
+1. Executive build directive
+Build a complete rental-equipment operations application that connects equipment, customers, rentals, inspection evidence, damage assessment, maintenance work, repair-charge approval and S/4HANA billing status into one traceable lifecycle. Deliver working source code and reproducible local run steps—not only wireframes, generated files, or a plan.
+Must deliver
+Acceptance outcome
+Backend
+CAP Node.js + TypeScript services, CDS data model, validations, actions, authorization, OData V4 APIs, REST mobile sync/media metadata endpoints.
+Persistence
+Local development database and deterministic seed data; production HANA Cloud configuration/deployment artifacts. Database logic must not depend on the mock adapter.
+Web app
+Fiori Elements/SAPUI5 back-office screens for fleet, asset history, inspections/damage, repair jobs, charge approval, maintenance, configuration, dashboards and integration monitoring.
+Mobile app
+React Native TypeScript client with barcode/QR scan abstraction, camera capture, inspection wizard, signature capture interface, encrypted offline queue, retry/conflict UI and sync status.
+Media
+Private object-storage adapter, signed access, immutable photo metadata, SHA-256 integrity validation, thumbnails and retention metadata.
+Integration
+Adapter interface and mock implementation for S/4HANA master-data sync and outbound maintenance/billing operations. SAP destinations and credentials come from environment/bindings, never source files.
+Reliability
+Transactional outbox, retry/backoff, idempotency, dead-letter state, replay/reconciliation screen and operational alerts.
+Quality
+Tests, API examples, architecture/data-flow docs, threat/security notes, environment sample, seed script, CI pipeline and deployment instructions.
+Proof
+Build/lint/tests run, app boots locally, core flows pass in browser/API tests, screenshots or walkthrough artifacts recorded, remaining blockers listed explicitly.
+2. What the supplied files say
+2.1 ER diagram — entities and relationships
+The provided diagram contains ten primary business entities and depicts these main relationships:
+Entity
+Core purpose shown by diagram
+Relationships represented
+Customers
+Customer and contact details; external S/4 customer ID.
+One customer has many rentals and many repair bills.
+Rentals
+Rental dates, return dates, status and total rental amount.
+One rental belongs to a customer; one rental contains many rental items; many condition logs and repair bills can relate to a rental.
+Rental Items
+Equipment assigned to one rental with item-specific rate and dates.
+Many rental items belong to one rental; each item references one equipment record.
+Equipment
+Asset identity, type, manufacturer/model/serial, location, rate and current status.
+Many rental items, condition logs and maintenance records can refer to one equipment record; each equipment item belongs to one current location.
+Locations
+Location name/type/address/city/coordinates.
+One location holds many equipment records.
+Condition Logs
+Inspection date/type/grade, inspector, meter and notes.
+Each log references equipment and rental; one log can report many damage records.
+Damage Records
+Type/description/severity/estimate/liability/status.
+Many damage records can come from a condition log; each damage can be evidenced by multiple photos and referenced by repair billing.
+Damage Photos
+Filename, media type, binary content, uploaded time and uploader.
+Many photos can evidence one damage record.
+Maintenance Records
+Service type/date/description/provider/cost/next date/status.
+Many maintenance records can refer to one equipment item.
+Repair Bills
+Rental/customer/damage, bill date, repair amount, tax, total, status and S/4 billing document ID.
+Bill links to rental, customer and damage; design should prevent duplicate successful charges for the same chargeable damage.
+Figure 1. Supplied ER diagram. It is retained as the starting point, while the extensions and corrections below are required to meet the FRD.
+2.2 Functional Requirement Document — main scope
+CAP backend on SAP BTP using Node.js/TypeScript and CDS; OData V4 services plus REST endpoints for mobile synchronization and media upload.
+SAP Fiori Elements for back-office lists, object pages, analytics and approval worklists; limited custom SAPUI5 for maps and photo comparison.
+Offline-first mobile app for yard workers, QR/barcode/NFC, camera, inspection wizard and signature capture.
+SAP HANA Cloud as CAP persistence, object storage for evidence, document repository/DIM for generated reports, authentication/authorization and BTP deployment services.
+Integration: equipment, business partners/customers, and rental contracts from S/4HANA; maintenance notification/order, repair charge requests and billing status to/from S/4HANA.
+Critical workflows: standard inspection grading A–D, damage photos, repair estimate, customer-liability review, approval, maintenance work and repair billing.
+Explicit non-functional targets: 500 peak users, 100,000 assets, 5 million media files, 99.5% business-hours availability, RPO <1 hour, RTO <4 hours, 80%+ business-logic unit coverage.
+3. Findings, conflicts and required corrections
+Finding
+Why it matters
+Blueprint resolution
+S/4HANA vs SAP HANA wording
+S/4 business objects must be changed through supported business APIs; writing to the S/4 database schema can bypass business rules and is not an accepted integration contract.
+CAP owns operational records in its app database. Use S/4 APIs via Destination/Connectivity for S/4 business operations. Do not issue SQL against S/4 application tables.
+Local master data vs S/4 source of truth
+FR-001 says users maintain customers, while INT-02 says customers sync from S/4. Similar ambiguity exists for rentals/contracts.
+Implement adapters and a configurable source-of-truth policy. Demo mode allows local CRUD; S/4 read-through mode treats synchronized customers as read-only; production write-through is enabled only after the business API/process is agreed.
+Two media platforms named
+FRD names Cloudinary for photos/PDFs and SAP Object Store with S3-compatible API for photos/video. Duplicating evidence is a cost, integrity and retention risk.
+Use one authoritative private object-storage provider through `MediaStorageProvider`. Default to S3-compatible Object Store. Keep DIM/doc repository as a separate optional `DocumentRepositoryProvider`; do not add Cloudinary unless explicitly selected.
+Billing API ambiguous
+FRD lists `API_DEBIT_MEMO_REQUEST_SRV` or `API_SALES_ORDER_SRV`; standard billing document read API is not necessarily the API used to create the source document.
+Isolate billing behind `BillingPostingProvider`. Verify API and business process against target S/4 edition/release and Finance decision. In demo mode return clearly marked simulated document IDs.
+Maintenance API name/version may differ
+FRD labels a maintenance notification API; SAP publishes versioned API names and may use OData V2 or V4 by edition/release.
+Verify target metadata and use the exact supported API. Do not hardcode the FRD alias as a guaranteed endpoint. Capture verified base paths, entity sets, auth and version in `docs/integrations/s4-api-matrix.md`.
+Location transfer is required but not modelled
+FR-011 requires a transfer history, while the ERD stores only current Equipment.LocationID.
+Add append-only `EquipmentLocationHistory` with from/to location, transfer timestamp, actor, reason, source and sync key. Update equipment current location in the same transaction.
+Audit/outbox/sync state absent from ERD
+Mandatory offline operation, retries, audit, immutable evidence and integration replay cannot be safely represented by the ten entities alone.
+Add AuditEvents, IntegrationOutbox, IntegrationSyncRuns, IdempotencyRecords, MediaAssets/Metadata and checklist/configuration tables.
+Damage compared with checkout baseline
+FRD says new damage must be billed and pre-existing damage must not; the ERD does not represent baseline comparison.
+Link check-in condition log to checkout condition log/item and require a human-confirmed `NewDamageComparedToCheckout`/liability decision with evidence before a charge can be posted.
+Photo binary in the database conflicts with object store
+LargeBinary per photo can bloat HANA and undermine lifecycle/versioning.
+Store bytes in private object storage; keep only metadata, provider/key, checksum, MIME, byte size, captured/uploaded times and uploader in HANA.
+Unknown currency, tax and approval threshold
+Amounts are decimal, but business currency, tax regime, rate inclusivity and auto-approval threshold are not approved.
+Use ISO currency code per monetary transaction, configurable tax provider/rules, decimal minor-unit rounding, and configuration tables. Until a threshold is configured, fail closed: route charges to manual approval.
+“Automatic” cannot mean unreviewed photo-based billing
+Image AI is explicitly out of scope; photo capture alone cannot prove customer liability.
+No AI damage inference. Human inspector records damage and liability; compare history; apply configurable charge and approval rules; log reason and evidence. Auto-post only after required approval conditions are satisfied.
+KPI claims need operational measurement
+95% billed damage, <15-minute auto billing, <24-hour approvals are outcomes, not guaranteed code features.
+Implement timestamps, status events and dashboard measures so they can be measured; never fabricate target achievement in seed data or the go-live report.
+4. Decisions and architecture baseline
+Decision
+Default for implementation
+Change condition
+Backend
+SAP CAP Node.js + TypeScript, CDS model; service contract OData V4, plus explicitly scoped REST sync/media routes.
+Only change with architecture approval.
+Database
+SQLite/local CAP profile or supported local adapter for developer run; SAP HANA Cloud profile for production.
+Never couple domain logic to a particular SQL dialect.
+Web UI
+SAP Fiori Elements OData V4 List Report/Object Page/Analytical List Page, with small custom UI5 components only where required.
+Use custom UI only for photo slider, map and evidence-specific interactions.
+Mobile
+React Native + TypeScript, Android/iOS. Use an encrypted local persistence adapter and native camera/scan/signature adapters.
+Agent must verify compatible current packages and prove Android/iOS builds; abstract platform plugins.
+Media
+One S3-compatible private media adapter by default; signed URL access, checksum, version/retention metadata.
+Only use another provider via an explicitly selected provider implementation.
+Documents
+PDF generator plus a document repository adapter. Store report metadata and hash; DIM integration is optional until provisioned.
+Do not block local demo if DIM credentials are absent.
+Integration
+`INTEGRATION_MODE=mock|s4`; adapter contracts shared by mock and real providers.
+Only enable S/4 write operations after target API, auth and business process are verified.
+Source of truth
+CAP owns condition logs, damage, photos metadata, workflow, approval, audit, outbox and repair-bill status cache. S/4 is authoritative for S/4-owned equipment/BP/contracts when configured.
+A field ownership matrix must be documented and enforced.
+Automatic approvals
+Configurable threshold per currency/plant/damage category. No production threshold is embedded in source.
+Auto-approval stays disabled until Finance/Operations approves threshold and tax treatment.
+Time handling
+Persist UTC instants for events; display in configured plant/user timezone; dates remain date-only where appropriate.
+No locale-derived date arithmetic in business rules.
+Pricing/tax
+Decimal arithmetic; currency code; versioned rate/tax/approval configuration; auditable rule snapshot per bill.
+Tax rates, tax determination and ledger accounts require Finance confirmation.
+5. Functional scope and role workflows
+5.1 Release 1 scope
+Build everything within the supplied Release 1 boundary: equipment tracking, rentals/items, checkout/check-in inspection, damage records/photos, liability/repair estimate, maintenance, repair charge approval and S/4 integration abstractions, reports, location transfer, audit, outbox and offline mobile workflow. Keep AI photo damage detection, IoT/telematics and customer self-service explicitly out of scope.
+5.2 Roles and permitted activities
+Role
+Allowed actions
+Restrictions
+YardWorker
+Scan asset; perform check-out/check-in/periodic inspection; capture required photos; enter meter/notes; request location transfer; work offline.
+Cannot view/edit repair prices or approve customer charges. Cannot delete submitted inspections.
+Dispatcher
+Manage check-out/return operations; resolve asset assignment issues; approve configured operational overrides with reason.
+No unrestricted finance approval; every override logged.
+Technician
+View assigned repairs; update repair status and actuals; upload before/after photos; enter maintenance records; request quarantine release.
+Cannot approve customer billing unless also explicitly assigned Finance/Manager role.
+BillingClerk
+Review evidence and estimates; edit charge lines within policy; approve/dispute; post eligible billing request; reconcile S/4 billing status.
+Reject/adjust/dispute require reason. Cannot bypass threshold without delegated approval.
+Manager
+Cross-functional approvals and dashboards; exceptional overrides with reason; plant-scoped review.
+Actions remain audited; not a route to bypass authentication or plant scope.
+Admin
+Manage catalogues, checklists, rate cards, approval rules, integration configuration references and user/plant mapping.
+Secrets stay in BTP bindings/secret store; changes to pricing/security config are versioned and audited.
+Auditor
+Read-only views of history, evidence metadata, approvals, integration attempts and reports.
+No mutation, posting, deletion or retry.
+5.3 Primary end-to-end journeys
+Fleet overview → search/filter asset → open asset detail → view status, location, active rental, next maintenance and complete timeline.
+Checkout: scan equipment → confirm it is assigned to the correct rental item → complete checklist → record meter/grade/photos/signature → mark item checked out only after validation.
+Return: scan equipment → load checkout baseline → checklist and mandatory views/photos → compare baseline to return state → create damage records only where inspector confirms new damage → set liability to pending review if uncertain.
+Charge: damage estimate → finance policy and tax calculation → approval routing → create idempotent outbox command → verified S/4 business API adapter → persist external request/document IDs and polling status.
+Repair: create maintenance notification/order if configured and approved → assign technician → capture work and actuals → release equipment only after required inspection and role validation.
+Location transfer: scan asset → verify permissions and target location → append transfer history → update current equipment location atomically → sync S/4 only if ownership/API contract requires it.
+Offline: locally save inspection and evidence manifest with device-generated IDs → display pending sync → retry safely → reconcile server response → never duplicate inspections/damages/billing after replay.
+Outage: continue allowed offline inspections; queue outbound events; surface integration outage and queue age; retry and reconcile after recovery; never report success before SAP confirms it.
+6. Data model and ERD extensions
+Use UUID primary keys for CAP-owned entities. Keep stable SAP external IDs separately and index them with source system/tenant as needed. Use associations rather than duplicated descriptive text wherever a valid relation exists; preserve historical snapshots for charge, evidence and approved decisions.
+6.1 Entities from the ERD — implementation fields
+Entity
+Core fields / types
+Rules and notes
+Customers
+ID UUID; companyName String(100); contactPerson String(100); email String(100); phone String(20); address String(255); s4BusinessPartnerID String(50); sourceSystem; externalID; plant/scope metadata; active flag.
+Email normalized for search; external BP ID unique per source. CRUD allowed in local demo; S/4 ownership policy enforced in live mode.
+Rentals
+ID UUID; customer association; rentalDate Date; expectedReturnDate Date; actualReturnDate Date nullable; status enum; currency String(3); totalRentalAmount Decimal(15,2) derived/snapshot; externalContractID / externalSalesDocumentID; plant.
+Return dates validated; total is computed from rental items and pricing policy, not client-supplied. External document IDs indexed.
+RentalItems
+ID UUID; rental association; equipment association; dailyRentalRate Decimal(15,2); currency; startDate/endDate Date; status enum; checkoutConditionLog/checkinConditionLog references optional.
+Rate snapshots at booking; prevent overlapping active rentals for the same asset unless an approved policy explicitly allows it.
+Equipment
+ID UUID; location association; name/type/manufacturer/model/serial; purchaseDate; defaultRate Decimal(15,2); currency; currentStatus enum; S/4 equipment ID; sourceSystem; plant; version/modifiedAt.
+Serial/external ID uniqueness policy; current location is a pointer backed by append-only transfer history; status changes only via lifecycle actions.
+Locations
+ID UUID; name; type enum; address; city; latitude/longitude Decimal(9,6) nullable; plant/site; active flag.
+Validate coordinate bounds. Store plant/site scope for authorization. Prevent deleting locations in use.
+MaintenanceRecords
+ID UUID; equipment association; maintenanceType; date; description; serviceProvider; cost Decimal(15,2); currency; nextMaintenanceDate; status enum; externalMaintenanceOrderID; work/actual cost timestamps.
+Next date cannot precede performed date unless explicitly justified. Equipment should be quarantined/in maintenance according to approved state transitions.
+ConditionLogs
+ID UUID; equipment/rental/rentalItem associations; inspectionDateTime UTC; inspectionType enum; conditionGrade A/B/C/D; inspectorID/name; meterReading Decimal(15,2) nullable; notes; baselineConditionLogID nullable; deviceID; sync key; submittedAt; signature metadata.
+Submitted inspection immutable except a correction record with actor/reason. Support CHECK_OUT, CHECK_IN, PERIODIC, POST_MAINTENANCE.
+DamageRecords
+ID UUID; conditionLog association; damageType; description; severity enum; repairEstimate Decimal(15,2); actualRepairCost Decimal(15,2) nullable; currency; customerLiability enum/status; customerLiable Boolean nullable; damageStatus enum; baseline/new-damage fields; review reason; resolvedAt.
+Charge cannot be posted until new-damage comparison, evidence, liability, estimate, currency, taxes and approval rules are satisfied.
+DamagePhotos / MediaAssets
+ID UUID; damage association; storageProvider; objectKey; original filename; MIME; byteSize; SHA-256; thumbnail key; capturedAt; uploadedAt; uploadedBy; device/photo type; upload status; legalHold/version IDs.
+Binary content stored externally; allow multiple views/photos; validate content type/size and checksum; signed URLs expire.
+RepairBills
+ID UUID; rental/customer/damage associations; billDate; repairAmount/taxAmount/totalAmount Decimal(15,2); currency; billingStatus enum; calculation snapshot; approval/rejection reason; external request/document IDs; idempotency key; postedAt.
+Server-calculated totals only. Unique active posting per damage and idempotency key. Store invoice/billing status separately from repair-work status.
+6.2 Required supporting entities not shown in the ER diagram
+Entity
+Fields and purpose
+Why required
+EquipmentLocationHistory
+ID, equipmentID, fromLocationID, toLocationID, movedAt, movedBy, reason, deviceID, syncKey, externalSyncStatus. Append-only.
+FR-011 needs complete transfer history; current LocationID alone cannot prove movement history.
+InspectionChecklist + Items
+Checklist ID/version/name/inspection type/plant/active; items with sequence, prompt, required flag, answer type, fail action; answers link inspection and item.
+Configurable standardized checklist, mandatory shots/answers and reproducible historical rule version.
+RateCardRules
+Version, valid dates, plant/type/damage code, base rate, labor/parts handling, minimum/maximum, currency, tax rule reference, active flag.
+Rates must be configuration-driven and decisions reproducible.
+ApprovalRules
+Plant, currency, min/max amount, damage category, approver role, auto-approval allowed, validity dates, version.
+Approval limits were explicitly left open; avoid hardcoded monetary thresholds.
+AuditEvents
+Actor/user/role/plant, action, entity type/ID, timestamp, correlation ID, reason, safe field-change summary, device/IP metadata subject to policy.
+Immutable, exportable record of reads where required and all material writes/approvals/postings.
+IntegrationOutbox
+ID, event type, aggregate ID, target system, payload version, payload ref, idempotency key, status, attempts, nextAttemptAt, lastError, SAP request/correlation ID, created/processedAt.
+Reliable asynchronous calls/retries; prevents business transaction from being lost on external downtime.
+IntegrationSyncRun
+Sync type, start/end, cursor/watermark, counts, error summary, status, triggeredBy, correlationID.
+15-minute sync monitoring and recovery.
+IdempotencyRecords
+Caller/device/key, operation, request hash, response reference, creation/expiry time.
+Mobile replay and outbound retries must not create duplicate inspections, damages, maintenance requests or charge documents.
+NotificationRecords
+Recipient/reference, channel, template, created/sent/read status, failure details.
+Trace in-app/email notifications without putting credentials or personal secrets into logs.
+ConfigurationVersion
+Configuration type, version, valid from/to, author, approver, JSON/CDS values with validation.
+Rates, checklists and approval changes need auditability and historical reproduction.
+RepairWorkActuals (optional child entity)
+RepairBill/Damage ID, labor/parts/other cost components, quantity, currency, enteredBy, timestamp, source.
+Supports traceable cost lines and approved estimate-versus-actual reporting.
+6.3 Relationships and constraints
+Relationship
+Cardinality
+Constraint
+Customer → Rental
+1 to many
+Rental requires one customer unless explicitly allowed for a draft import.
+Rental → RentalItem
+1 to many
+A rental can contain many equipment items; each item belongs to exactly one rental.
+Equipment → RentalItem
+1 to many over time
+One item references one equipment record; prevent concurrent active allocation conflicts.
+Location → Equipment
+1 to many current state
+One current location per equipment item; historical moves live in EquipmentLocationHistory.
+Equipment → ConditionLog
+1 to many
+Inspection history retained across rentals/maintenance.
+Rental/RentalItem → ConditionLog
+1 to many
+Check-out and check-in should refer to the same item and be compared; enforce sensible type/date sequence.
+ConditionLog → DamageRecord
+1 to many
+Damage belongs to a specific inspection and cannot exist without inspection context.
+DamageRecord → MediaAsset
+1 to many
+At least one required evidence photo for relevant damage types; allow multiple photos and before/after categories.
+Equipment → MaintenanceRecord
+1 to many
+External order IDs unique per S/4 target; duplicate command protected with idempotency.
+DamageRecord → RepairBill
+0 to many attempts, one successful active posting
+Keep history of draft/rejected/failed attempts if needed, but enforce one active/posted charge per damage/business event.
+Equipment → LocationHistory
+1 to many
+History append-only; current location change and history insert occur in the same DB transaction.
+7. Business rules and state machines
+7.1 Rental and equipment lifecycle
+Rental: DRAFT → BOOKED → CHECKED_OUT → PARTIALLY_RETURNED → RETURNED → CLOSED
+Optional terminal states: CANCELLED. OVERDUE is derived from the expected return date and open items, not a status trusted from the client.
+Equipment: AVAILABLE → RESERVED → RENTED_OUT → INSPECTION_PENDING → AVAILABLE
+Damage path: INSPECTION_PENDING → QUARANTINED/DAMAGED → IN_REPAIR → INSPECTION_PENDING → AVAILABLE
+Other terminal/administrative state: RETIRED. All transitions occur through named CAP actions.
+Agent must implement transition maps and unit tests; generic PATCH must not permit a caller to jump directly between arbitrary statuses. Each transition verifies role, plant scope, relevant associated records and reason when it is an override.
+7.2 Condition grade
+Grade
+Proposed interpretation
+Default behavior
+A
+Excellent / no material issues.
+May release to available if inspection complete and no open safety damage.
+B
+Good / expected wear.
+Release may be allowed by checklist rules.
+C
+Fair / defect or repair may be needed.
+Configurable hold/quarantine based on defect/severity; review required.
+D
+Poor / unsafe, major damage or unusable.
+Quarantine automatically until authorized repair/inspection releases it.
+These are starting labels only; business owners must approve the exact meaning, translations and release rules. Do not infer condition grade from photos; grade is human-entered, validated and audit logged.
+7.3 Damage, customer liability and evidence rules
+Every damage record must reference the inspection that observed it. A check-in damage claim should reference or compare against the relevant check-out baseline for the same rental item/equipment.
+Use explicit states for liability: PENDING_REVIEW, CUSTOMER_LIABLE, NOT_CUSTOMER_LIABLE, DISPUTED, WAIVED. Keep the original assessor, reviewer, timestamp, reason and evidence link.
+Before billing, require documented confirmation that the damage is new relative to baseline, photos satisfy the configured requirement, repair scope/estimate exists, charge currency is known and a valid rate/tax configuration was applied.
+Keep the photo bytes private and immutable after submission; corrections/additional evidence should add a new media version/record rather than silently replacing the original. Compute SHA-256 server-side when uploaded and verify on retrieval/processing where supported.
+No AI-based damage detection is to be built in Release 1. The UI may present evidence comparison but cannot automatically conclude customer liability.
+7.4 Pricing and billing calculation
+repairSubtotal = approved parts + approved labor + other allowed charges
+taxAmount = taxProvider.calculate(repairSubtotal, configuredTaxContext)
+totalAmount = roundCurrency(repairSubtotal + taxAmount, currency)
+Never trust amounts sent by a browser/mobile client. Calculate and persist the rule/version snapshot server-side.
+A bill is eligible to post only when: damage is chargeable + evidence is complete + liability is approved
++ no conflicting posted charge exists + approval policy is satisfied + billing adapter is configured.
+Rental total should be derived from item rate snapshots and an approved day-count convention (for example, inclusive/exclusive end date), discount/late-fee policy, and currency. The FRD does not define the convention; implement it as a tested policy function and record the chosen rule on the rental. Never assume tax rate, tax-inclusion, currency, loss-of-use fee or ledger account.
+7.5 Billing states
+DRAFT → PENDING_APPROVAL → APPROVED → POSTING_PENDING → POSTED
+Transitions from PENDING_APPROVAL may also go to ADJUSTMENT_REQUIRED, REJECTED, DISPUTED or WAIVED.
+POSTING_PENDING → POSTED on confirmed S/4 response/reconciliation; → POSTING_FAILED on non-retryable error; transient errors remain retryable.
+Retry after timeout must reuse the same idempotency/business reference and reconcile S/4 before creating a new request.
+8. API and service contract
+Expose only APIs needed by the UI/mobile and remote adapters. Keep business actions explicit and typed; do not expose every field for unrestricted updates. Generate service metadata from CDS and include request/response examples in the repository.
+Service / route
+Main resources/actions
+Contract expectations
+RentalManagementService (OData V4)
+Customers, Rentals, RentalItems, Equipment, Locations; search/filter/sort/paging; create/update where source policy allows.
+Fiori annotations, value helps, entity-level restrictions, computed KPI/overdue fields, draft-enabled edits where appropriate.
+ConditionManagementService (OData V4)
+ConditionLogs, checklists, checklist answers; actions `startInspection`, `submitInspection`, `compareWithBaseline`.
+Submission validates required checklist/photo/signature fields; accepted inspection becomes immutable.
+DamageManagementService (OData V4)
+DamageRecords, media metadata, RepairBills; `confirmLiability`, `requestApproval`, `approveCharge`, `adjustCharge`, `rejectCharge`, `disputeCharge`, `postCharge`.
+Role/plant checks server-side; reason mandatory on adjust/reject/dispute/override; amounts server-calculated.
+MaintenanceManagementService (OData V4)
+MaintenanceRecords; `createRepairJob`, `assignTechnician`, `recordActuals`, `completeRepair`, `releaseQuarantine`.
+Actions enforce equipment safety state and technician/manager permissions.
+AnalyticsService (OData V4)
+Fleet status, utilization, overdue, condition compliance, estimated vs billed damage, maintenance costs and integration queue KPIs.
+Aggregation/filtering on server. KPI definition and time window documented.
+IntegrationMonitorService (OData V4)
+Outbox, sync runs, masked payload, attempt status, `retryMessage`, `reconcileMessage`.
+Read rights by role; retry is a deliberate audited action and cannot mutate payload/business facts.
+REST `/api/mobile/sync`
+Upload offline operations batch, per-device sequence/ID, cursor, result by operation.
+Per-operation acknowledgement; idempotency key; partial success supported; conflict returned explicitly.
+REST `/api/media`
+Initiate upload, finish upload, verify checksum, request short-lived read URL, thumbnail metadata.
+Enforce MIME/size/authorization, signed URL expiry, malware scanning hook if platform offers it.
+REST `/health` and `/ready`
+Liveness, readiness and dependency status.
+Never leak secrets, tokens or internal payloads in health responses.
+8.1 Required API behavior
+Use OData V4 conventions and CAP-generated metadata for back-office data services. Verify `$count`, `$skip`, `$top`, search and paging in the actual generated service.
+Use structured validation errors with stable error codes and correlation IDs. UI should show human-readable reason, not raw stack traces.
+Add correlation ID on each request and propagate to outbox/SAP calls/logs. Mask personal data and secrets in logs.
+Use ETags/optimistic concurrency for mutable records where supported, especially approvals/configuration. Return a conflict instead of silently overwriting concurrent work.
+Paginate all high-volume collections; do not load all assets or media into memory. Use indexes, server-side filtering and bounded payload sizes.
+Document all status transitions and actions; generic CRUD must not bypass business rules.
+9. Fiori back-office requirements
+Screen
+Floorplan / implementation
+Required behavior
+Fleet Overview
+Analytical List Page plus drill-down Object Page.
+KPI tags/cards for available, rented out, overdue, damaged/quarantined; searchable/filterable table; plant/location/type/status/date filters; navigate to asset details.
+Asset Detail
+Object Page.
+Header: serial, equipment ID, status, current location, active rental/custodian derivation, next maintenance date. Facets: General, Timeline, Inspections, Damage, Repairs, Documents, Location History, Media Gallery.
+Inspection Review
+Object Page plus narrowly scoped custom UI5 comparison component.
+Check-out vs check-in photo comparison/slider, checklist answers, grade/meter, damage records, evidence metadata, signatures, audit trail and evidence export. Clearly show baseline and return timestamps.
+Damage Charge Approval
+List Report + Object Page + bound actions.
+Worklist prioritizes pending/high-severity/overdue; view estimates and supporting evidence; Approve/Adjust/Reject/Dispute; enforce mandatory reason for adjust/reject/dispute; show S/4 status and history.
+Repair Jobs
+List Report + Object Page.
+Filter by status/technician/equipment/plant; assign technician; record parts/labor actuals; upload before/after photos; complete with sign-off.
+Maintenance Planner
+List Report plus calendar-style custom view if necessary.
+Upcoming/overdue maintenance; filters by location/type/status; drill into equipment and maintenance record; create/update work within policy.
+Configuration
+List Report + Object Pages.
+Manage damage catalogue, checklist versions, pricing/rate cards, photo requirements, approval rules, notification templates and integration settings references. Version and audit every change.
+Integration Monitor
+List Report/Object Page.
+Outbox status, type, age, attempt count, masked payload, correlation/request IDs, last error, next retry and safe retry/reconcile actions.
+Management Dashboard
+Analytical List Page.
+Billing leakage, estimated vs billed damage, utilization, maintenance cost, compliance/photo coverage, turnaround times and top damaged categories; export authorized data.
+Repair Bill / Billing Document view
+Object Page or embedded facet.
+Calculation snapshot, currency/tax, approver/reasons, posting attempt timeline, S/4 request/document reference, reconciliation state and PDF link if available.
+Use standard Fiori floorplans before writing custom UI code. Custom controls must follow keyboard navigation, responsive layout, focus handling, loading/error/empty states, and Fiori design conventions. Provide i18n resource files from the start. Web screens must not display buttons that the current role is not permitted to invoke; server-side authorization remains authoritative.
+10. Mobile and offline requirements
+10.1 Mobile screens
+Login/session expiry and device-registration status; secure token storage; no embedded client secrets.
+Home: tasks due, rentals ready to check out/return, inspections requiring sync, sync failures and selected plant/location.
+Scan: QR/barcode first with NFC behind an interface and enabled only if device/product labels support it. Show clear not-found/duplicate/wrong-rental responses.
+Inspection wizard: check-out/check-in/periodic type, checklist version, meter reading, grade A–D, notes, per-question validation, signature capture if enabled and required photo capture.
+Damage capture: type, severity, description, estimate only if role permits, evidence list with capture timestamp, retake, offline queued state and upload checksum status.
+Before/after comparison: load existing checkout evidence and new return evidence; show timestamps and allow the inspector to affirm or reject “new damage” comparison.
+Location transfer: scan asset, choose destination, enter reason, submit transfer; show history and sync result.
+Offline queue: pending, syncing, succeeded, conflict, needs user action; retry and details; never say “posted to SAP” until server confirms it.
+Profile/settings: last sync, current site/plant, app version, offline data cache, device support diagnostics and sign-out/cache-wipe controls.
+10.2 Offline data and synchronization
+Concern
+Required implementation
+Local persistence
+Encrypted SQL store for drafts, inspection payloads, checklist versions, sync metadata and media file references. Avoid unencrypted photo/database cache on shared devices. Store credentials/tokens in platform secure storage.
+Stable identifiers
+Generate UUIDs on device before sending. Each operation includes `deviceId`, `clientOperationId`, idempotency key, entity IDs, client createdAt, payload schema version and local sequence.
+Append-only inspections
+Submitted inspections and initial evidence are immutable. Corrections become correction records/events. Device replay must not create a new inspection if the operation was already acknowledged.
+Sync protocol
+Pull reference/config versions with cursor; push bounded batches; server validates per operation; return per-item ACCEPTED/REJECTED/CONFLICT plus server IDs/cursors.
+Conflict rules
+Reference/master records: server authoritative. Inspection evidence: append-only merge where valid. Equipment current status/location: server workflow wins and app asks user to resolve stale state. Bills/postings: server only.
+Retry policy
+Retry network/transient errors with exponential backoff and jitter. Do not retry validation/authorization failures automatically. Preserve failed payload safely for debugging with data masking.
+Media upload
+Persist encrypted local file and metadata; use short-lived upload URL/session; verify bytes/checksum server-side; acknowledge upload separately from inspection sync; resume/retry uploads without duplicating media records.
+Retention and logout
+Clear tokens and local protected data according to MDM policy; protect unsynced records from accidental loss and inform the user. Implement remote wipe as an integration hook if mobile-management services are provisioned.
+11. SAP S/4HANA and BTP integration
+11.1 Integration boundary
+Non-negotiableUse supported S/4HANA business APIs through SAP BTP Destination Service and SAP Connectivity/Cloud Connector where needed. Do not connect to or mutate S/4 application database tables directly. Use local CAP transactions for CAP-owned records and an outbox for external side effects.
+11.2 API verification matrix
+Business data / action
+FRD reference
+Implementation requirement
+Equipment master import
+`API_EQUIPMENT` / INT-01
+Confirm target edition, service version, entity set, field names, filter/paging and allowed read/write operations. Use stable external equipment IDs.
+Business Partner / customer
+`API_BUSINESS_PARTNER` / INT-02
+Confirm which business partner role/data segments provide company/contact/email. Define data ownership and update strategy before enabling writes.
+Rental contract/items
+Sales contract/order APIs / INT-03
+Open question in FRD. Finance/SD team must identify the object representing a rental contract, its item model, contract extension strategy and API. Isolate adapter until approved.
+Maintenance notification
+FRD alias `API_MAINTNOTIFICATION`; official current docs use API_MAINTENANCENOTIFICATION in some editions
+Verify exact target release/API version and metadata. Build request mapping and contract tests against a mock based on verified metadata.
+Maintenance order / actuals
+`API_MAINTENANCEORDER` or release-specific service
+Verify supported create/change/status/actual-cost operations, mandatory fields, plant/work center, order type and lifecycle. Do not assume all operations are enabled.
+Repair charge creation
+FRD alternatives `API_DEBIT_MEMO_REQUEST_SRV` or `API_SALES_ORDER_SRV`
+Finance/SD must select the supported business transaction (debit memo request, sales order or other approved SD document). Implement exact adapter only after metadata + pricing/accounting flow review.
+Billing status/PDF
+`API_BILLING_DOCUMENT_SRV` / INT-07
+Treat as a read/status/PDF source unless target documentation proves required create path. Use supported API/events for readback/reconciliation; do not confuse billing-document read with bill creation.
+Attachments / damage PDF
+`API_CV_ATTACHMENT_SRV` or document viewer; DIM / INT-08/09
+Confirm repository and object-link rules. Use an adapter and store external document IDs plus integrity metadata.
+Media upload
+S3-compatible API / INT-10
+Private storage, short-lived signed upload/download, checksum, versioning and retention; do not route large binary through CAP DB.
+Notifications
+SAP Notification/email / INT-11
+Use a provider abstraction; store delivery status. No credentials embedded in app settings.
+The FRD is not sufficient to guarantee every named API is available on the target SAP release. The agent must write `docs/integrations/s4-api-matrix.md` with: target edition/release (or unknown), verified official API URL, API technical name/version/protocol, auth mechanism, service root, entity sets/actions, required properties, paging/delta behavior, error mapping, idempotency approach, sandbox test status and environment-specific configuration. Mark any unverified operation BLOCKED, keep mock behavior working, and never report it as live.
+11.3 Sync and outbox mechanics
+Run scheduled reference synchronization at a configurable 15-minute interval and allow an authorized on-demand sync. Keep checkpoints/watermarks, last successful run, fetched/upserted/skipped counts and errors.
+For a business write, validate and commit the CAP business record plus outbox message in the same local database transaction. A worker claims queued messages using a concurrency-safe lease/lock and sends them to the adapter.
+Persist request correlation/reference before/with the external attempt. Use a stable idempotency key based on business operation; when S/4 does not support idempotency keys, query/reconcile by external reference before issuing a second create.
+Classify errors: retry transient network/429/5xx/timeouts; require intervention for validation, permission, configuration and business-rule errors. Use exponential backoff + jitter, max retry policy, then DEAD_LETTER with alert. Do not drop payloads.
+On ambiguous timeout during a create, do not blindly create again. Reconcile via external reference/document lookup, then mark success or keep an explicit ambiguous state for manual resolution.
+Mask sensitive payload properties from UI/logs. Integration Monitor retries require permission and create audit events; replay cannot edit original business facts.
+Use Event Mesh only if provisioned and confirmed; polling fallback must be supported for billing-status readback.
+11.4 Environment configuration
+INTEGRATION_MODE=mock                 # mock | s4; default mock locally
+SAP_DESTINATION_EQUIPMENT=HANA_QAS    # environment destination name, not a URL/credential
+SAP_DESTINATION_BUSINESS_PARTNER=HANA_QAS
+SAP_DESTINATION_RENTAL=HANA_QAS      # only after API approved
+SAP_DESTINATION_MAINTENANCE=HANA_QAS
+SAP_DESTINATION_BILLING=HANA_QAS
+MEDIA_PROVIDER=local                 # local | s3-compatible
+DOCUMENT_PROVIDER=local-pdf          # local-pdf | dim
+SYNC_INTERVAL_MINUTES=15
+OUTBOX_MAX_ATTEMPTS=12
+OUTBOX_BASE_BACKOFF_SECONDS=10
+# Secrets and destination credentials must come from BTP service bindings/secret store, not .env committed to Git.
+12. Security, audit and privacy
+Control
+Required behavior
+Authentication
+OAuth 2.0/OIDC with XSUAA or IAS per BTP landscape. Use secure browser/mobile token flows; PKCE for public mobile clients and OS secure storage. No client secret in mobile bundle.
+Authorization
+Enforce roles at service/entity/action level and instance/plant scope in CAP. Every API call checks server-side identity and scope. Hiding a button is not security.
+Role separation
+YardWorker cannot view charge amounts; Technician cannot approve billing by default; Auditor read-only; Admin cannot silently erase financial/evidence history.
+Secrets
+No passwords/tokens in source, committed .env, logs, screenshots or mobile config. Supply `.env.example` with placeholders only. Use BTP destination/service bindings and managed secret storage.
+Data in transit/at rest
+TLS 1.2+ target per FRD; use platform encryption at rest for HANA/object storage; document TLS termination and any local development exception.
+Media
+Private bucket; signed URLs with short expiry; type/size validation; SHA-256; versioning; legal hold and retention metadata; no public ACLs. Add malware-scan hook where service exists.
+Audit
+All material writes, approvals, rejections, overrides, configuration changes, integration retries and postings create durable audit events with actor/time/correlation/reason.
+Immutability
+Do not edit/delete submitted condition evidence in place. Use correction/addendum records. Separate personal-data deletion/anonymization from required financial/legal evidence retention.
+Mobile
+Encrypted DB and protected files; secure token storage; app lock/session expiry as policy requires; no sensitive logs; MDM/remote-wipe hook if available; verify iOS and Android behavior.
+Threat modeling
+Address OWASP ASVS L2 and MASVS controls from FRD. Test access-control bypass, cross-plant access, upload abuse, IDOR, replay, token expiry, injection, unsafe URLs, rate limits and dependency vulnerabilities.
+Privacy
+Define data minimization, residency, subject-access/deletion, retention and access logging with legal/privacy owner. Avoid retaining user device/IP fields unless approved and necessary.
+13. Non-functional requirements
+ID / target from FRD
+Engineering implementation and verification
+NFR-001: ALP initial load <3s p95; API reads <500ms; charge calc <2s
+Server paging/filters, database indexes, bounded DTOs, query plan review, caching only where safe; k6 measurements with data volume described. Do not claim targets pass without recorded tests.
+NFR-002: 500 peak users; 100,000 assets; 5 million media files
+Load-test representative endpoints, paging, filtering, media upload and outbox. Use object-store listing/index only via metadata; do not load all files into HANA.
+NFR-003: 99.5% business-hours availability; RPO <1h; RTO <4h
+Document BTP/HANA backup, multi-zone/HA expectations, recovery runbook and responsibility split. These are deployment-level service commitments, not code-only guarantees.
+NFR-004: retention 7 years; cold storage after 12 months
+Configurable retention policy, object-store lifecycle, financial/evidence holds, retention metadata and scheduled deletion that checks legal hold.
+NFR-005: data residency/compliance country TBD
+Add deployment/config check list; block production configuration sign-off until region/data processing approvals are defined.
+NFR-006: CI/CD
+Git-based lint/test/build, dependency/security scan, artifact build, environment-specific deployment manifests; mobile build pipeline documented separately (Fastlane if selected).
+NFR-007: Android 10/iOS 15 minimum; full-shift battery; thumbnail <1s
+Define supported native/device list; test low-end/rugged hardware; resize thumbnail locally off the UI thread and measure capture-to-thumbnail performance.
+NFR-008: health/metrics/tracing/alerts
+Correlation IDs, structured logs, counters/timers, readiness endpoint, outbox age/failure alert, sync run failure, storage errors, posting failures and audit export.
+NFR-009: business logic unit coverage >=80%
+Coverage gate on pricing, lifecycle transitions, eligibility/liability rules, approval routing, idempotency/outbox classification and authorization policies. Report exact coverage output.
+Accessibility/i18n
+Keyboard navigation, screen-reader labels, color not sole status indicator, scalable layout, translation files, UTC/local timezone tests.
+Resilience
+Graceful HANA/S/4/storage unavailability; circuit breakers/timeouts where appropriate; no false success; capped retries; documented recovery/reconciliation.
+14. Repository structure and engineering standards
+rental-equipment-tracking/
+AGENTS.md                         # Always-on Antigravity project rules
+README.md                         # setup, run, test, demo workflows
+docs/
+architecture.md
+requirements-traceability.md
+data-dictionary.md
+status-and-workflows.md
+integrations/s4-api-matrix.md
+integrations/mock-mode.md
+runbooks/deployment.md
+runbooks/incident-and-reconciliation.md
+security/threat-model.md
+testing/test-plan.md
+decisions/ADR-*.md
+db/
+schema.cds                       # CAP-owned entities + helper entities
+seed/                            # development-only reference/demo data
+srv/
+services.cds                     # service projections/actions
+handlers/                        # validation/workflow/business logic
+integrations/                    # ports/adapters, mock + S/4 implementations
+workers/                         # outbox, sync, reconciliation
+test/
+app/
+fleet-overview/                  # Fiori Elements ALP
+asset-management/                # List Report/Object Page
+damage-approval/                 # approval worklist/actions
+maintenance/                     # repair jobs/planner
+integration-monitor/             # outbox/sync operations
+shared/                          # UI5 custom components only as needed
+mobile/
+src/screens/
+src/domain/
+src/api/
+src/offline/
+src/media/
+src/platform/                    # camera/scanner/signature/storage adapters
+src/navigation/
+__tests__/
+test/                              # API/integration/contract/e2e tests
+scripts/                           # seed, verify, smoke test, safe admin tasks
+.env.example                       # placeholders only
+package.json / lockfile
+mta.yaml / xs-security.json        # production files when dependencies selected
+.github/workflows/ or CI config   # lint, typecheck, tests, build, security scans
+14.1 Code quality rules
+Use strict TypeScript, narrow types, explicit domain enums and a clean module boundary. Do not solve type errors with widespread `any`, unchecked casts or disabling strict checks.
+Keep domain rules independent of CAP transport and SAP adapter implementations; put rules in tested domain/service modules.
+Use database migrations/build artifacts compatible with CAP/HANA and document schema evolution. Avoid destructive change migrations without expand/contract compatibility.
+Use deterministic seed data for demo scenarios only; do not seed production credentials, fake invoice numbers presented as live, or personal information.
+Pin dependency lockfiles and run vulnerability checks. Agent must consult the installed/current official toolchain before choosing packages or flags.
+Provide consistent empty, loading, error, offline, permission-denied and conflict states. Do not build UI buttons whose actions are placeholders.
+No “TODO” may remain in an acceptance-critical code path unless listed as blocked due to credentials/target system and the mock implementation provides a working demo path.
+When a test fails, diagnose and fix the code/config; do not weaken/remove the test merely to make the suite green.
+15. Testing and acceptance matrix
+Test area
+Minimum scenarios
+Pass evidence
+Unit: data/rules
+Date validation; money rounding; tax configuration missing; condition grade values; permitted transitions; threshold routing; liability gates; location history; rental overlap rules.
+Automated tests and coverage report. Business logic >=80% statement/line coverage target.
+Unit: idempotency/outbox
+Same mobile operation twice; outbox worker crash after SAP response; timeout on create; 429/5xx; permanent 4xx; max retries/dead letter; concurrent worker claims.
+No duplicate inspection/damage/bill; correct retry/status; reconciliation path and audit event.
+API/authz
+CRUD by each role, price field masking, cross-plant access, auditor write attempt, invalid state patch, missing reason, bad checksum, upload over limit.
+Expected 401/403/400/409; no data leakage; log correlation IDs.
+End-to-end inspection
+Check-out inspection with required evidence; check-in inspection with same asset/rental; two new damages offline and sync later.
+Exactly one server inspection per operation, no duplicated damage/photo record, baseline links correct.
+Billing correctness
+New liable damage vs pre-existing damage; threshold below/above; reject/adjust reasons; tax/rate config; S/4 timeout + retry.
+Pre-existing damage cannot post; eligible charge posts once; document ref and status reconcile.
+Outage/resilience
+S/4 outage 2 hours; object store temporary failure; DB restart; job worker restart; network reconnect.
+Inspections saved offline; no loss of queued outbox; alerts raised; queue drains after recovery.
+Photo integrity
+Wrong MIME, corrupt image, altered bytes/hash mismatch, expired signed URL, unauthorized access, photo replacement attempt.
+Invalid media rejected; private access; hash mismatch handled; audit/history retained.
+Fiori UI
+Fleet filters/drill-down; object pages; approval actions; role visibility; keyboard/accessibility; empty/error/loading states; responsive layouts.
+Browser recordings/screenshots, console clear, all buttons functional.
+Mobile UI
+Camera/scan on supported device; offline draft, app restart, low battery/network change, sync conflict, large images, encrypted storage.
+Device tests/automated UI run; offline state truthful; no duplicate sync; baseline photos viewable.
+Performance
+Representative 100k assets, 5m media metadata, query pagination, photo upload and 500 concurrent user target.
+k6/JMeter result with test dataset, latency/error percentile and bottleneck notes.
+Security
+SAST/DAST/dependency scan, role tests, secret scan, rate limits, upload abuse, token expiry, plant isolation.
+Reports with findings and severity; critical/high findings resolved or formally accepted.
+Deployment/UAT
+Deploy to DEV/QAS; validate bindings and environment config; business acceptance at pilot yard.
+Release checklist, smoke test, rollback plan and signed UAT evidence.
+15.1 Required acceptance scenarios from FRD
+Offline return inspection with photos and two damage items syncs later without duplicates.
+New damage is billed only after required review; pre-existing damage is not billed.
+Charge below a configured threshold posts automatically only if auto-approval is enabled and all eligibility checks pass; S/4 document number appears in the asset timeline after confirmation.
+Charge over threshold waits for approval; after S/4 timeout and retry, only one charge request/document exists.
+During a two-hour HANA/S/4 outage, inspections continue in offline mode; the outbox remains durable, alert is raised, and queue drains/reconciles after recovery.
+Role and plant restrictions hold; user with wrong plant scope cannot access records; photo with hash mismatch is rejected.
+Location transfer maintains a full history and changes the current location exactly once.
+An attempted generic PATCH that skips state transition validation is rejected.
+16. Delivery phases and quality gates
+Antigravity should execute the phases sequentially in the same task/session, using subagents for independent reviews where supported. Do not stop after producing a plan. Run the available build/test/UI checks at each gate, repair failures, and continue until the final report is evidence-based.
+Phase
+Implementation activities
+Exit gate
+0. Inspect and plan
+Read all supplied files; inspect repository; create architecture/ADR/traceability; list assumptions and blockers; validate current SAP/Antigravity tooling.
+No ambiguity hidden. Files changed and sequence planned. Proceed without asking avoidable questions; use documented safe defaults.
+1. Bootstrap
+Create repo structure, CAP project, TypeScript config, lint/format/test scripts, local profile, environment validation, CI, AGENTS.md and README.
+Install/build/lint/typecheck succeed on clean setup; app starts in mock mode.
+2. Data model/services
+Implement ERD entities plus history/audit/outbox/config/idempotency/checklists; CDS associations, indexes, constraints, seeds, OData services and metadata.
+Schema compiles; migration/deploy profile builds; service metadata valid; model tests pass.
+3. Domain workflows
+Add state machines, inspection/checklist validation, baseline damage comparison, liability, price/tax/config versioning, approval, maintenance and location transfers.
+Unit suite covers all critical business rules and forbidden state jumps.
+4. Media and offline sync
+Implement storage interface/local adapter; upload flow/hash; mobile DB adapter, operation queue, sync endpoints, conflicts and idempotent replay.
+Demo workflow works offline and online without duplicates; media tests pass.
+5. S/4 integration seams
+Add mock remote APIs; Destination-based real adapters gated by config; outbox worker, scheduled sync, retry/reconcile/alerts; API matrix.
+Mock adapter passes contract tests; real adapters clearly marked verified/unverified by target system.
+6. Fiori web
+Build ALP/list/object pages, approvals, maintenance, configuration, integration monitor and custom evidence comparison.
+Browser flows pass; no dead controls; screenshots/artifacts included.
+7. Mobile app
+Build core scan/inspection/camera/offline/sync/conflict/settings flows and device adapters.
+Build target runs or exact external SDK limitation is documented; device tests completed where devices available.
+8. Quality hardening
+Automated integration/e2e tests, coverage, performance, accessibility, security scan and failure injection.
+Acceptance matrix shows PASS/FAIL/BLOCKED with concrete evidence and no concealed failures.
+9. Deployment & handover
+MTA/BTP configuration, profiles DEV/QAS/PROD, CI/CD, runbooks, backup/recovery, API matrix, demo seed, screenshots and final status.
+Clean developer setup works; deployment blocked only by missing external provisioning/credentials, documented exactly.
+17. Configuration, deployment and operations
+17.1 Local developer run
+Prerequisites (agent must verify current supported versions): Node.js LTS, npm, Git, SAP CAP/CDS tooling; Java/MTA tooling only if MTA build needs it.
+1. npm ci
+2. copy .env.example to .env and keep credentials blank/mock
+3. npm run db:seed       # or equivalent documented command
+4. npm run dev           # start CAP/API and the local mock mode
+5. start the Fiori app using its documented dev command
+6. start the mobile app using the documented React Native command
+7. npm test && npm run lint && npm run typecheck && npm run build
+8. run scripts/smoke-test.* and the scripted demo flow.
+The final README must contain exact verified commands and URLs produced by the build, not assumed ports or placeholder “should work” instructions.
+17.2 Production deployment
+Use separate DEV/QAS/PROD destinations and separate database/service bindings. Never point a developer seed script at production.
+Use MTA/Cloud Foundry deployment modules appropriate to the final CAP/HANA/HTML5 architecture; generate deployment descriptors from actual project structure and verify `cds build --production`.
+Bind HANA Cloud, XSUAA/IAS, Destination, Connectivity/Cloud Connector (if on-prem), HTML5 Application Repository/Content, Work Zone/Launchpad, Job Scheduling, logging/alerting and optional Event Mesh only when provisioned.
+No secret credentials in Git or `mta.yaml`; use service bindings/environment references. Validate destination connectivity from a non-production environment before live write enablement.
+Before production write enablement: approve target S/4 release/API metadata, least-privilege technical roles, business document type, currency/tax rules, approval threshold, account assignment, source-of-truth policy and rollback/reconciliation runbook.
+Apply lifecycle retention, access reviews, disaster recovery, backup/restore drills, monitoring and mobile managed distribution. Document what is platform/SAP responsibility versus application responsibility.
+17.3 Operational dashboard and alerts
+Metric/alert
+Trigger or view
+Outbox backlog age/count
+Alert on oldest pending age, growing count or dead-letter count above configured thresholds.
+SAP posting failures
+Track transient vs permanent failures, ambiguous timeouts and daily unreconciled charges.
+Reference sync freshness
+Show last successful sync and watermark per dataset; alert if configured freshness SLA is missed.
+Evidence upload failures
+Track incomplete uploads, checksum rejects, storage quota/throttle and retry counts.
+Business KPIs
+New damage with bill; estimate-to-billed variance; median approval time; auto-approved vs manual; utilization; overdue assets; inspections missing required photos.
+Security / permission denials
+Aggregate access-denied events without exposing tokens or overly sensitive payload data.
+App health/performance
+Readiness, latency percentiles, error rate, DB connection health and worker status.
+18. Antigravity execution protocol
+The current Antigravity docs describe an agentic development environment that can use editor/terminal/browser tools, create plans/artifacts, and verify work [R1]. Its project rules are persistent instructions; a root `AGENTS.md` is a supported rule location [R2]. Use those capabilities to make work verifiable instead of assuming one natural-language request guarantees a complete production system.
+18.1 Before writing code
+Read the ERD image and FRD end-to-end. Convert every FR requirement FR-001…FR-025 and NFR-001…NFR-009 into a traceability file with a test or explicit external dependency.
+Inspect the actual repository before creating or overwriting files. Preserve useful working code; create a branch/worktree where available; commit logically separated milestones if Git is initialized.
+Write architecture decisions (ADRs) for the baseline, media provider, integration mode, data source ownership, mobile storage, billing provider and any nontrivial deviation.
+Before selecting new packages, verify current official docs/compatibility and the actual toolchain. Avoid obsolete generators and API endpoints.
+18.2 While building
+Assign independent reviews (data model/business rules, integration/security, Fiori/mobile testing) to subagents only when the current Antigravity surface supports them; do not assume subagents share uncommitted files safely.
+Implement thin vertical slices and run relevant tests after each phase. Do not generate all files in one uncontrolled dump and postpone validation.
+Use mock adapters by default. Live write adapter must fail closed if config or verified API details are missing. Never fabricate success responses as production outcomes.
+Keep a `docs/requirements-traceability.md` with each requirement, implementation path, automated/manual test, status and evidence. Update after changes.
+If tool/credential/system access blocks an operation, implement its interface and deterministic mock path, record the exact blocker, and continue the remaining project.
+18.3 Final verification and report
+Run install from a clean lockfile, lint, format check, typecheck, tests, coverage, production build, migrations/schema compile, API smoke tests and relevant mobile/UI build commands.
+Launch the app locally and verify the principal happy paths with browser/device automation if available. Save screenshots or a walkthrough artifact for the fleet page, inspection/compare flow, damage approval, integration monitor and mobile offline flow.
+Review the git diff and search for secrets, TODOs, direct S/4 database access, unsafe media URLs, disabled lint/tests, dead buttons, hard-coded thresholds/tax and placeholder integrations.
+Produce `docs/final-build-report.md` with what works, exact run commands, test output/coverage, screens, architecture, configuration required, known defects, unverified live integration points and next owner actions.
+Never report a test as passed unless it was run. Never report production-connected or S/4-posted unless a real target system confirmed it.
+19. Open decisions / questions
+Proceed with the safe defaults in Section 4 and document these items in a decision register. Production write paths should remain disabled until applicable items are resolved.
+ID
+Question / decision needed
+Owner
+Default until resolved
+DEC-01
+Exact SAP S/4HANA edition, deployment type, release, base URL/communication arrangement and Cloud Connector need?
+Solution Architect / SAP Basis
+Mock integration only.
+DEC-02
+Which source owns equipment/customer/rental records? Must the app create customers or contracts in S/4? Which exact rental contract/order API?
+Functional + SD team
+Mirrored/read-only external masters in live mode; local CRUD only in demo mode.
+DEC-03
+Which exact maintenance notification/order APIs, versions, document types, mandatory org data and status readback are enabled?
+EAM/PM + SAP integration
+Mock adapter only for write operations.
+DEC-04
+Which S/4 SD business transaction creates the damage charge (debit memo request, sales order, other)? How will it be billed and posted to FI?
+Finance + SD
+No live billing writes.
+DEC-05
+Default currency/currencies, rounding, tax procedure/rate, tax inclusion, jurisdiction, G/L/account assignment and price condition determination?
+Finance/Tax
+Charge cannot auto-post; config validation blocks unknown tax/currency.
+DEC-06
+Auto-approval threshold by amount/currency/plant/damage type, write-off percentage and segregation of duties?
+Business Owner + Finance
+Auto-approval disabled until configured.
+DEC-07
+Does contract/legal policy permit loss-of-use, depreciation, cleaning, late return, deductible or other damage charges?
+Legal + Business
+Out of calculation until explicitly approved.
+DEC-08
+Choose authoritative object-store provider and region; is DIM provisioned? Is Cloudinary approved?
+BTP Architect + Security
+S3-compatible provider abstraction; local storage in development; no Cloudinary duplication.
+DEC-09
+Mobile devices, MDM, label system (QR/barcode/NFC), supported rugged hardware and signature/legal consent rules?
+IT + Yard Operations
+QR/barcode path; NFC behind feature flag; signature adapter configurable.
+DEC-10
+Plant/site model, user-to-plant mapping, identity provider, MFA policy, auditor access and mobile remote-wipe integration?
+Security + IAM
+Least privilege; no global access by default.
+DEC-11
+Data residency country, retention exceptions, legal hold, personal-data deletion and audit export obligations?
+Legal/Privacy/Compliance
+No production sign-off until documented.
+DEC-12
+Required languages, time zones, supported browsers and accessibility target?
+Product Owner
+English baseline, configurable locale/time zone.
+DEC-13
+Who approves condition grades, mandatory photos/checklists, severity categories, release/quarantine matrix?
+Fleet/Operations
+Versioned default catalogue visibly marked as starter configuration.
+DEC-14
+Are asset custodian, customer signature and location transfer required to sync to S/4?
+Operations + SAP integration
+Store in CAP; S/4 sync disabled until mapped.
+DEC-15
+Expected usage by tenant, media/photo sizes, retention costs and BTP HANA sizing?
+Architect + Operations
+Measure/size via load test; 4 GB is only FRD initial sizing assumption, not production sizing approval.
+20. Copy-paste master build prompt
+The companion file `Antigravity_Master_Build_Prompt.md` contains the complete, copy-paste prompt intended to run the implementation. It is duplicated below in compact form for convenience; use the companion file as the authoritative prompt because it is easier to select and paste.
+Execution modeTell Antigravity: “Carry the build through implementation and verification. Do not stop at an architecture plan or ask me to make routine choices. Make safe defaults explicit; continue with mock adapters wherever real SAP provisioning is missing; report blockers only when they are truly external.”
+Implement the full Rental Equipment Tracking & Condition Logging project by following `Antigravity_Master_Build_Prompt.md` and this blueprint. Read the supplied ERD and FRD in full, inspect the repository before edits, then execute all implementation and verification phases—do not stop at a plan.
+Build CAP Node.js/TypeScript + CDS/OData V4, Fiori Elements/SAPUI5, React Native mobile, offline sync, secure media storage, HANA production configuration, mock and verified S/4 adapters, transactional outbox, idempotency, audit, workflows, dashboards, CI/deployment docs and tests. Preserve every FR/NFR in a requirement-to-code-to-test matrix.
+Use safe defaults and a fully working mock mode where real SAP systems are unavailable. Never access S/4 application tables directly, invent credentials/API support, claim mock postings are live, bill pre-existing damage, or blindly retry a possibly completed external create. Implement all code paths possible, run the build/tests/UI checks, fix failures, save verification artifacts, and produce a truthful final report with exact commands and external blockers.
+21. Authoritative reference links
+These official references were consulted for the technology and integration guidance. API availability and operations still must be checked against the customer’s exact edition/release and enabled communication scenarios.
+[R1] Google Antigravity — IDE overview / agentic development environment — https://www.antigravity.google/docs/ide/overview/
+Supports agent workflows across workspace/editor/terminal/browser and artifacts/verification concepts.
+[R2] Google Antigravity — Rules — https://antigravity.google/docs/rules/
+Documents persistent project rules and supported workspace rule files such as AGENTS.md/GEMINI.md.
+[R3] SAP CAP Node.js — TypeScript — https://cap.cloud.sap/docs/node.js/typescript
+Official setup and use of TypeScript with CAP Node.js.
+[R4] SAP CAP — Serving provided services / OData protocols — https://cap.cloud.sap/docs/node.js/cds-serve
+CAP services, OData V4 and REST protocol service setup.
+[R5] SAP CAP — Deploy to Cloud Foundry — https://cap.cloud.sap/docs/guides/deploy/to-cf
+Production CAP deployment preparation for HANA, auth, remote services, MTA and UI.
+[R6] SAP CAP — HANA Cloud for production — https://cap.cloud.sap/docs/guides/databases/hana
+CAP use of SAP HANA and deployment workflow.
+[R7] SAP Help — Destination Service — https://help.sap.com/docs/connectivity/sap-btp-connectivity-cf/destination-service
+Purpose of destinations for remote service routing/authentication and use with connectivity service for on-premise targets.
+[R8] SAP Help — Equipment API (`API_EQUIPMENT`) — https://help.sap.com/docs/SAP_S4HANA_CLOUD/f9ba73d1b8c543c2bd2ba1666271af86/8ffe7c063141444489f7ac2d07f4b934.html
+Equipment API summary; release-specific documentation applies.
+[R9] SAP Help — Maintenance notification operations — https://help.sap.com/docs/SAP_S4HANA_CLOUD/f9ba73d1b8c543c2bd2ba1666271af86/ae5d2dfd196945199dc3f2562b3a5e63.html
+Shows the documented technical name `API_MAINTENANCENOTIFICATION` in that API release.
+[R10] SAP Help — Maintenance Order (Version 2) — https://help.sap.com/docs/SAP_S4HANA_CLOUD/f9ba73d1b8c543c2bd2ba1666271af86/c1457e0e539740a29932fbdcf36fea3c.html
+Versioned maintenance order API information; target release must be matched.
+[R11] SAP Help — Billing Document - Read, Cancel, GetPDF — https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/fe6f3eda2f914d81b512493fd79e9769.html
+Describes `API_BILLING_DOCUMENT_SRV` as a read/cancel/PDF API; do not assume it creates a billing document.
+[R12] SAP Help — Billing Document API — https://help.sap.com/docs/SAP_S4HANA_CLOUD/03c04db2a7434731b7fe21dca77440da/65680dabb62546029175655482f85edc.html
+Billing document API behavior and relationship to billable SD documents.
+[R13] SAP Help — Fiori Elements floorplans — https://help.sap.com/docs/SAP_FIORI_tools/17d50220bcd848aa854c9c182d65b699/7833775ae607430c9d708d9a3a145263.html
+List Report, Worklist, Analytical List Page, Object Page and custom page options.
+[R14] SAP CAP — Messaging and event/outbox concepts — https://cap.cloud.sap/docs/node.js/messaging
+CAP messaging abstractions and reliability considerations; use an application outbox where durable external business posting is required.
+Appendix A. Requirement traceability starter
+Antigravity must turn this starter into a complete maintained table in the repository. IDs below summarize the FRD’s intent; retain every original requirement ID and acceptance criterion in the full matrix.
+Req ID
+Requirement group
+Required code/test evidence
+FR-001–004
+Customers, rentals/items and equipment
+CDS/service tests; source-of-truth policy; item consistency and availability checks.
+FR-005, 014–015
+Inspection, baseline and A–D grades
+Offline/online inspection tests, checklist/photo validation and baseline comparison.
+FR-006, 016–021
+Damage, liability, photos, estimates and bills
+State machine, evidence hash/immutability and prevention of billing pre-existing damage.
+FR-007–009
+Charge, rental lifecycle, returns/overdue
+Pricing/approval/outbox/reconciliation tests and date-driven overdue KPI.
+FR-010–013
+Location transfer and maintenance
+Plant-scope, append-only transfer history, maintenance schedule and adapter tests.
+FR-022–025
+Search, utilization, maintenance/billing reports
+Paging/filter tests, report definitions, export permissions and seeded demo validation.
+NFR-001–009
+Performance, recovery, retention, mobile, CI, observability, coverage
+Measured load/latency, recovery/retention runbooks, pipeline/mobile evidence, alerts and coverage report.

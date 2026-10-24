@@ -1,5 +1,9 @@
 'use strict';
 
+if (!process.env.CDS_ENV && (process.env.VCAP_SERVICES || '').includes('hana')) {
+  process.env.CDS_ENV = 'hybrid';
+}
+
 const cds = require('@sap/cds');
 const { seed } = require('../db/seed/data');
 
@@ -50,11 +54,13 @@ async function upsertRows(tx, name, rows) {
 }
 
 async function connectDb() {
+  const db = cds.env.requires.db || (cds.env.requires.db = {});
   if (isHana()) {
-    if (!cds.db) await cds.connect.to('db');
-    return;
+    db.kind = 'hana';
+    db.impl = '@cap-js/hana';
+  } else {
+    ensureSqliteUrl();
   }
-  ensureSqliteUrl();
   if (!cds.db) await cds.connect.to('db');
 }
 
@@ -67,7 +73,8 @@ async function main() {
     cds.User?.privileged ||
     (typeof cds.User?.Privileged === 'function' ? new cds.User.Privileged() : new cds.User({ id: 'privileged' }));
 
-  await cds.tx({ user: privileged }, async (tx) => {
+  const dbc = cds.db;
+  await dbc.tx({ user: privileged }, async (tx) => {
     for (const [name, rows] of Object.entries(data)) {
       if (!rows?.length) continue;
       try {

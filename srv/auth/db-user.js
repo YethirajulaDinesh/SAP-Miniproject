@@ -12,7 +12,9 @@ function privilegedUser() {
 }
 
 async function withPrivileged(fn) {
-  return cds.tx({ user: privilegedUser() }, fn);
+  const user = privilegedUser();
+  if (cds.db && typeof cds.db.tx === 'function') return cds.db.tx({ user }, fn);
+  return cds.tx({ user }, fn);
 }
 
 async function findUserByUsername(username) {

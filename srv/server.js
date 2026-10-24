@@ -2,25 +2,32 @@
 
 const cds = require('@sap/cds');
 
-cds.env.features = cds.env.features || {};
-cds.env.features.in_memory_db = false;
-for (const name of Object.keys(cds.env.requires || {})) {
-  const r = cds.env.requires[name];
-  if (r && (r.kind === 'sqlite' || String(r.impl || '').includes('sqlite'))) {
-    delete cds.env.requires[name];
+function forceHana() {
+  cds.env.features = cds.env.features || {};
+  cds.env.features.in_memory_db = false;
+  cds.env.features.with_mocks = false;
+  const prev = cds.env.requires.db || {};
+  const credentials = { ...(prev.credentials || {}) };
+  delete credentials.driver;
+  cds.env.requires.db = {
+    kind: 'hana',
+    impl: '@cap-js/hana',
+    credentials,
+  };
+  if (cds.env.requires.kinds) {
+    cds.env.requires.kinds.sql = { kind: 'hana', impl: '@cap-js/hana' };
+    cds.env.requires.kinds.sqlite = { kind: 'hana', impl: '@cap-js/hana' };
   }
 }
-cds.env.requires.db = {
-  kind: 'hana',
-  impl: '@cap-js/hana',
-  credentials: cds.env.requires.db?.credentials || {},
-};
+
+forceHana();
 
 const { register } = require('./handlers/register');
 const { start } = require('./workers/outbox-worker');
 const { mountRest } = require('./rest/api');
 
 cds.on('bootstrap', (app) => {
+  forceHana();
   const fs = require('fs');
   const path = require('path');
   const express = require('express');

@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "postinstall": "node -e \"try { require('fs').rmSync('node_modules/@cap-js/sqlite', { recursive: true, force: true }) } catch (e) {}\"",
     "setup": "cds deploy --to hana",
     "start": "cds bind --exec -- cds-serve --profile hybrid",
     "dev": "cds bind --exec -- cds-serve --profile hybrid",

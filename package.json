@@ -9,13 +9,11 @@
   },
   "scripts": {
     "setup": "cds deploy --to hana",
-    "setup:sqlite": "cds deploy --to sqlite:db.sqlite && node scripts/seed.js",
     "start": "cds bind --exec -- cds-serve --profile hybrid",
     "dev": "cds bind --exec -- cds-serve --profile hybrid",
     "watch": "cds bind --exec -- cds-serve --profile hybrid",
     "seed": "cds bind --exec -- node scripts/seed.js",
     "build": "cds build --production && node scripts/copy-app.js",
-    "deploy:local": "cds deploy --to sqlite:db.sqlite",
     "lint": "eslint srv test scripts app --ext .js,.ts",
     "typecheck": "node -e \"require('fs').accessSync('srv/domain/lifecycle.js'); console.log('typecheck: JS domain present')\"",
     "test": "vitest run --coverage",
@@ -31,17 +29,16 @@
     "express": "^4.22.1"
   },
   "devDependencies": {
-    "@cap-js/sqlite": "^3.1.2",
     "@sap/cds-dk": "^10.2.0",
     "@types/express": "^5.0.3",
     "@types/node": "^24.7.2",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^10.13.0",
     "globals": "^16.4.0",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4",
-    "@vitest/coverage-v8": "^3.2.4"
+    "vitest": "^3.2.4"
   },
   "cds": {
     "requires": {
@@ -52,18 +49,20 @@
         "[hybrid]": {
           "impl": "./srv/auth/session-auth.js"
         },
-        "[production]": { "kind": "xsuaa" }
+        "[production]": {
+          "kind": "xsuaa"
+        }
       },
       "db": {
-        "[development]": {
-          "kind": "sqlite",
-          "credentials": { "url": "db.sqlite" },
-          "impl": "@cap-js/sqlite"
-        },
-        "[hybrid]": { "kind": "hana" },
-        "[production]": { "kind": "hana" }
+        "kind": "hana",
+        "impl": "@cap-js/hana"
       }
     },
-    "server": { "port": 4004 }
+    "features": {
+      "in_memory_db": false
+    },
+    "server": {
+      "port": 4004
+    }
   }
 }

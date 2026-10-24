@@ -12,9 +12,8 @@ function privilegedUser() {
 }
 
 async function withPrivileged(fn) {
-  const user = privilegedUser();
-  if (cds.db && typeof cds.db.tx === 'function') return cds.db.tx({ user }, fn);
-  return cds.tx({ user }, fn);
+  if (!cds.db) throw new Error('HANA db is not connected');
+  return fn(cds.db);
 }
 
 async function findUserByUsername(username) {

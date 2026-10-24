@@ -1,36 +1,12 @@
 'use strict';
 
-if (!process.env.CDS_ENV && (process.env.VCAP_SERVICES || '').includes('hana')) {
-  process.env.CDS_ENV = 'hybrid';
-}
+if (!process.env.CDS_ENV) process.env.CDS_ENV = 'hybrid';
 
 const cds = require('@sap/cds');
 const { seed } = require('../db/seed/data');
 
 function entityName(name) {
   return `rental.equipment.${name}`;
-}
-
-function dbCreds() {
-  return cds.env.requires?.db?.credentials || {};
-}
-
-function isHana() {
-  const db = cds.env.requires?.db || {};
-  const creds = dbCreds();
-  return (
-    db.kind === 'hana' ||
-    db.kind === 'hana-cloud' ||
-    String(db.impl || '').includes('hana') ||
-    !!(creds.host || creds.certificate || creds.hdi_user || creds.schema)
-  );
-}
-
-function ensureSqliteUrl() {
-  const db = cds.env.requires.db || (cds.env.requires.db = {});
-  db.kind = 'sqlite';
-  db.impl = '@cap-js/sqlite';
-  db.credentials = { url: db.credentials?.url || db.credentials?.database || 'db.sqlite' };
 }
 
 async function upsertRows(tx, name, rows) {
@@ -53,19 +29,11 @@ async function upsertRows(tx, name, rows) {
   console.log('seeded', name, `${inserted} inserted, ${updated} updated`);
 }
 
-async function connectDb() {
-  const db = cds.env.requires.db || (cds.env.requires.db = {});
-  if (isHana()) {
-    db.kind = 'hana';
-    db.impl = '@cap-js/hana';
-  } else {
-    ensureSqliteUrl();
-  }
-  if (!cds.db) await cds.connect.to('db');
-}
-
 async function main() {
-  await connectDb();
+  const db = cds.env.requires.db || (cds.env.requires.db = {});
+  db.kind = 'hana';
+  db.impl = '@cap-js/hana';
+  if (!cds.db) await cds.connect.to('db');
   if (!cds.model) await cds.load('*');
 
   const data = seed();
@@ -73,8 +41,7 @@ async function main() {
     cds.User?.privileged ||
     (typeof cds.User?.Privileged === 'function' ? new cds.User.Privileged() : new cds.User({ id: 'privileged' }));
 
-  const dbc = cds.db;
-  await dbc.tx({ user: privileged }, async (tx) => {
+  await cds.db.tx({ user: privileged }, async (tx) => {
     for (const [name, rows] of Object.entries(data)) {
       if (!rows?.length) continue;
       try {
@@ -85,21 +52,11 @@ async function main() {
     }
   });
 
-  console.log('database kind:', cds.db?.kind || cds.env.requires?.db?.kind || 'unknown');
-}
-
-async function boot() {
-  if (!isHana() && cds.env.profiles?.includes?.('hybrid')) {
-    throw new Error(
-      'Hybrid/HANA profile has no HANA credentials. In BAS run:\n  npx cds bind -2 rental-db\n  npx cds bind --exec -- node scripts/seed.js',
-    );
-  }
-  await connectDb();
-  await main();
+  console.log('database kind:', cds.db?.kind || 'hana');
 }
 
 if (require.main === module) {
-  boot()
+  main()
     .then(() => process.exit(0))
     .catch((err) => {
       console.error(err);

@@ -1,6 +1,21 @@
 'use strict';
 
 const cds = require('@sap/cds');
+
+cds.env.features = cds.env.features || {};
+cds.env.features.in_memory_db = false;
+for (const name of Object.keys(cds.env.requires || {})) {
+  const r = cds.env.requires[name];
+  if (r && (r.kind === 'sqlite' || String(r.impl || '').includes('sqlite'))) {
+    delete cds.env.requires[name];
+  }
+}
+cds.env.requires.db = {
+  kind: 'hana',
+  impl: '@cap-js/hana',
+  credentials: cds.env.requires.db?.credentials || {},
+};
+
 const { register } = require('./handlers/register');
 const { start } = require('./workers/outbox-worker');
 const { mountRest } = require('./rest/api');

@@ -6,8 +6,9 @@ const { mediaProvider } = require('../integrations/providers');
 const { sha256 } = require('../domain/outbox');
 const { replayBatch } = require('../domain/offline');
 const { DomainError } = require('../domain/lifecycle');
-const { verifyPassword, publicUser } = require('../auth/passwords');
+const { verifyPassword, publicUser, matchDemoPassword } = require('../auth/passwords');
 const { createSession, destroySession, lookupSession } = require('../auth/sessions');
+const { findUserByUsername } = require('../auth/db-user');
 
 function cookieToken(req) {
   const raw = req.headers.cookie || '';
@@ -45,26 +46,40 @@ function mountRest(app) {
 
   app.post('/api/auth/login', async (req, res) => {
     try {
-      const cds = require('@sap/cds');
-      const { AppUsers } = cds.entities('rental.equipment');
       const username = String(req.body?.username || '').trim();
       const password = String(req.body?.password || '');
-      let user = await SELECT.one.from(AppUsers).where({ username });
-      if (!user) {
-        const { ensureDemoUsers } = require('../boot-seed');
-        await ensureDemoUsers();
-        user = await SELECT.one.from(AppUsers).where({ username });
-      }
-      if (!user) {
-        return res.status(401).json({
-          error: { code: 'INVALID_CREDENTIALS', message: 'User not found. Demo users were not in HANA. Restart cds watch after git pull.' },
-        });
-      }
-      if (!user.active) {
-        return res.status(401).json({ error: { code: 'USER_INACTIVE', message: 'User is inactive' } });
-      }
-      if (!verifyPassword(password, user.passwordHash)) {
+      if (!username || !password) {
         return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' } });
+      }
+      const { ensureDemoUsers } = require('../boot-seed');
+      try {
+        await ensureDemoUsers();
+      } catch (seedErr) {
+        console.warn('[login] demo user seed failed:', seedErr.message);
+      }
+      let user = await findUserByUsername(username);
+      const hashOk = user && verifyPassword(password, user.passwordHash);
+      const demoOk = matchDemoPassword(username, password);
+      if (!hashOk && !demoOk) {
+        return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' } });
+      }
+      if (!user && demoOk) {
+        try {
+          await ensureDemoUsers();
+          user = await findUserByUsername(username);
+        } catch (seedErr) {
+          console.warn('[login] could not persist demo user:', seedErr.message);
+        }
+        if (!user) {
+          const { seed } = require('../../db/seed/data');
+          user = (seed().AppUsers || []).find((u) => u.username === username);
+        }
+      }
+      if (!user) {
+        return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' } });
+      }
+      if (user.active === false || user.active === 0) {
+        return res.status(401).json({ error: { code: 'USER_INACTIVE', message: 'User is inactive' } });
       }
       const { token, expiresAt } = await createSession(user);
       res.setHeader('Set-Cookie', `re_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`);

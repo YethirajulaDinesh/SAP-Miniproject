@@ -123,3 +123,13 @@ describe('offline replay and outbox', () => {
     expect(idempotencyKey(['a', 'b'])).toBe(idempotencyKey(['a', 'b']));
   });
 });
+
+describe('demo passwords', () => {
+  const { hashPassword, verifyPassword, matchDemoPassword } = require('../srv/auth/passwords');
+  it('verifies manager / manager even if stored hash has padding', () => {
+    const stored = hashPassword('manager') + '  ';
+    expect(verifyPassword('manager', stored)).toBe(true);
+    expect(verifyPassword('wrong', stored)).toBe(false);
+    expect(matchDemoPassword('manager', 'manager')).toBe(true);
+  });
+});

@@ -1,26 +1,35 @@
 'use strict';
 
+const { USER_ENTITY, withPrivileged } = require('./auth/db-user');
+
 async function ensureDemoUsers() {
-  const cds = require('@sap/cds');
-  const { AppUsers } = cds.entities('rental.equipment');
   const { seed } = require('../db/seed/data');
   const users = seed().AppUsers || [];
-  for (const u of users) {
-    const existing = await SELECT.one.from(AppUsers).columns('ID', 'username').where({ username: u.username });
-    if (!existing) {
-      await INSERT.into(AppUsers).entries(u);
-      console.log('[boot-seed] created user', u.username);
-    } else {
-      await UPDATE(AppUsers, existing.ID).with({
-        passwordHash: u.passwordHash,
-        active: true,
-        role: u.role,
-        displayName: u.displayName,
-        plant: u.plant,
-      });
-      console.log('[boot-seed] refreshed demo password for', u.username);
+  await withPrivileged(async (tx) => {
+    for (const u of users) {
+      const existing = await tx.run(
+        SELECT.one.from(USER_ENTITY).columns('ID', 'username').where({ username: u.username }),
+      );
+      if (!existing) {
+        await tx.run(INSERT.into(USER_ENTITY).entries(u));
+        console.log('[boot-seed] created user', u.username);
+      } else {
+        await tx.run(
+          UPDATE(USER_ENTITY)
+            .set({
+              passwordHash: u.passwordHash,
+              active: true,
+              role: u.role,
+              displayName: u.displayName,
+              plant: u.plant,
+              email: u.email,
+            })
+            .where({ ID: existing.ID }),
+        );
+        console.log('[boot-seed] refreshed demo password for', u.username);
+      }
     }
-  }
+  });
 }
 
 async function ensureDemoData() {

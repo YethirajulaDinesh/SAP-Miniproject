@@ -64,6 +64,16 @@ function banner() {
   return `<div class="banner">INTEGRATION_MODE=${'mock'}. SAP postings are MOCK/SIMULATED until destinations exist. Permissions are enforced on the server.</div>`;
 }
 function setBusy(on) { $('#busy').classList.toggle('on', on); }
+function storeToken(t) {
+  token = t || null;
+  if (token) {
+    sessionStorage.setItem('re_token', token);
+    document.cookie = 're_session=' + encodeURIComponent(token) + '; path=/; max-age=43200; SameSite=Lax';
+  } else {
+    sessionStorage.removeItem('re_token');
+    document.cookie = 're_session=; path=/; max-age=0';
+  }
+}
 async function api(path, opts={}) {
   setBusy(true);
   try {
@@ -71,7 +81,12 @@ async function api(path, opts={}) {
     if (!(opts.body instanceof ArrayBuffer) && !(opts.body instanceof Uint8Array) && opts.body && !(opts.body instanceof Blob)) {
       headers['Content-Type'] = headers['Content-Type'] || 'application/json';
     }
-    if (token) headers.Authorization = 'Bearer ' + token;
+    const skipAuth = path === '/api/auth/login';
+    const t = token || sessionStorage.getItem('re_token');
+    if (t && !skipAuth) {
+      headers.Authorization = 'Bearer ' + t;
+      headers['x-re-session'] = t;
+    }
     const res = await fetch(path, { credentials:'include', ...opts, headers });
     const text = await res.text();
     let data; try { data = text ? JSON.parse(text) : {}; } catch { data = { raw:text }; }
@@ -105,8 +120,9 @@ async function login() {
   $('#loginErr').textContent = '';
   if (!(await pingBackend())) return;
   try {
+    storeToken(null);
     const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username: $('#userName').value, password: $('#userPass').value }) });
-    me = data.user; token = data.token; sessionStorage.setItem('re_token', token);
+    me = data.user; storeToken(data.token);
     showApp();
   } catch (e) { $('#loginErr').textContent = e.message; }
 }
@@ -115,7 +131,7 @@ async function restore() {
     $('#loginView').classList.remove('hidden');
     return;
   }
-  token = sessionStorage.getItem('re_token');
+  storeToken(sessionStorage.getItem('re_token'));
   try {
     const data = await api('/api/auth/me');
     me = data.user; showApp();
@@ -123,7 +139,7 @@ async function restore() {
 }
 $('#loginBtn').onclick = login;
 $('#userPass').addEventListener('keydown', (e) => { if (e.key==='Enter') login(); });
-$('#logoutBtn').onclick = async () => { await api('/api/auth/logout', { method:'POST' }); sessionStorage.removeItem('re_token'); location.reload(); };
+$('#logoutBtn').onclick = async () => { await api('/api/auth/logout', { method:'POST' }); storeToken(null); location.reload(); };
 
 function formVal(id) { return document.getElementById(id).value; }
 async function paint() {

@@ -82,7 +82,10 @@ function mountRest(app) {
         return res.status(401).json({ error: { code: 'USER_INACTIVE', message: 'User is inactive' } });
       }
       const { token, expiresAt } = await createSession(user);
-      res.setHeader('Set-Cookie', `re_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`);
+      res.setHeader(
+        'Set-Cookie',
+        `re_session=${token}; Path=/; SameSite=Lax; Max-Age=43200`,
+      );
       res.json({ user: publicUser(user), expiresAt, token });
     } catch (err) {
       console.error('[login]', err);

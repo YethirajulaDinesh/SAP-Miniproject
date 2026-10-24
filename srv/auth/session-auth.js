@@ -20,9 +20,12 @@ function cookie(req, name) {
 
 function requestToken(req) {
   const h = req.headers || {};
-  const auth = String(h.authorization || '');
-  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
-  return String(h['x-re-session'] || cookie(req, 're_session') || cookie(req, 're_token') || '').trim() || null;
+  const fromHeader = String(h['x-re-session'] || h['x-re-token'] || '').trim();
+  if (fromHeader) return fromHeader;
+  const fromCookie = cookie(req, 're_session') || cookie(req, 're_token');
+  if (fromCookie) return fromCookie;
+  const q = String(req.query?.re_session || req.query?.access_token || '').trim();
+  return q || null;
 }
 
 function applyUser(req, user) {

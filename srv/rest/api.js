@@ -11,11 +11,12 @@ const { createSession, destroySession, lookupSession } = require('../auth/sessio
 const { findUserByUsername } = require('../auth/db-user');
 
 function cookieToken(req) {
-  const raw = req.headers.cookie || '';
+  const h = req.headers || {};
+  const fromHeader = String(h['x-re-session'] || h['x-re-token'] || '').trim();
+  if (fromHeader) return fromHeader;
+  const raw = h.cookie || '';
   const part = raw.split(';').map((s) => s.trim()).find((s) => s.startsWith('re_session='));
   if (part) return decodeURIComponent(part.slice('re_session='.length));
-  const h = req.headers.authorization || '';
-  if (h.startsWith('Bearer ')) return h.slice(7);
   return null;
 }
 

@@ -84,7 +84,6 @@ async function api(path, opts={}) {
     const skipAuth = path === '/api/auth/login';
     const t = token || sessionStorage.getItem('re_token');
     if (t && !skipAuth) {
-      headers.Authorization = 'Bearer ' + t;
       headers['x-re-session'] = t;
     }
     const res = await fetch(path, { credentials:'include', ...opts, headers });

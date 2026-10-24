@@ -49,14 +49,28 @@ function mountRest(app) {
       const { AppUsers } = cds.entities('rental.equipment');
       const username = String(req.body?.username || '').trim();
       const password = String(req.body?.password || '');
-      const user = await SELECT.one.from(AppUsers).where({ username });
-      if (!user || !user.active || !verifyPassword(password, user.passwordHash)) {
+      let user = await SELECT.one.from(AppUsers).where({ username });
+      if (!user) {
+        const { ensureDemoUsers } = require('../boot-seed');
+        await ensureDemoUsers();
+        user = await SELECT.one.from(AppUsers).where({ username });
+      }
+      if (!user) {
+        return res.status(401).json({
+          error: { code: 'INVALID_CREDENTIALS', message: 'User not found. Demo users were not in HANA. Restart cds watch after git pull.' },
+        });
+      }
+      if (!user.active) {
+        return res.status(401).json({ error: { code: 'USER_INACTIVE', message: 'User is inactive' } });
+      }
+      if (!verifyPassword(password, user.passwordHash)) {
         return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' } });
       }
       const { token, expiresAt } = await createSession(user);
       res.setHeader('Set-Cookie', `re_session=${token}; HttpOnly; Path=/; SameSite=Lax; Max-Age=43200`);
       res.json({ user: publicUser(user), expiresAt, token });
     } catch (err) {
+      console.error('[login]', err);
       res.status(500).json({ error: { code: 'LOGIN_FAILED', message: err.message } });
     }
   });

@@ -23,8 +23,9 @@ cds.on('served', async () => {
   register(cds);
   start(cds);
   try {
-    const { ensureDemoData } = require('./boot-seed');
-    await ensureDemoData(cds);
+    const { ensureDemoUsers } = require('./boot-seed');
+    await ensureDemoUsers();
+    console.log('[boot-seed] demo users ready (manager / manager)');
   } catch (err) {
     console.warn('[boot-seed]', err.message);
   }

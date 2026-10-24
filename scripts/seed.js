@@ -7,6 +7,28 @@ function entityName(name) {
   return `rental.equipment.${name}`;
 }
 
+function dbCreds() {
+  return cds.env.requires?.db?.credentials || {};
+}
+
+function isHana() {
+  const db = cds.env.requires?.db || {};
+  const creds = dbCreds();
+  return (
+    db.kind === 'hana' ||
+    db.kind === 'hana-cloud' ||
+    String(db.impl || '').includes('hana') ||
+    !!(creds.host || creds.certificate || creds.hdi_user || creds.schema)
+  );
+}
+
+function ensureSqliteUrl() {
+  const db = cds.env.requires.db || (cds.env.requires.db = {});
+  db.kind = 'sqlite';
+  db.impl = '@cap-js/sqlite';
+  db.credentials = { url: db.credentials?.url || db.credentials?.database || 'db.sqlite' };
+}
+
 async function upsertRows(tx, name, rows) {
   const entity = entityName(name);
   let inserted = 0;
@@ -27,9 +49,18 @@ async function upsertRows(tx, name, rows) {
   console.log('seeded', name, `${inserted} inserted, ${updated} updated`);
 }
 
-async function main() {
-  if (!cds.model) await cds.load('*');
+async function connectDb() {
+  if (isHana()) {
+    if (!cds.db) await cds.connect.to('db');
+    return;
+  }
+  ensureSqliteUrl();
   if (!cds.db) await cds.connect.to('db');
+}
+
+async function main() {
+  await connectDb();
+  if (!cds.model) await cds.load('*');
 
   const data = seed();
   const privileged =
@@ -51,12 +82,12 @@ async function main() {
 }
 
 async function boot() {
-  if (!cds.model) await cds.load('*');
-  if (!cds.db) {
-    const kind = cds.env.requires?.db?.kind;
-    if (kind === 'hana') await cds.connect.to('db');
-    else await cds.deploy('*');
+  if (!isHana() && cds.env.profiles?.includes?.('hybrid')) {
+    throw new Error(
+      'Hybrid/HANA profile has no HANA credentials. In BAS run:\n  npx cds bind -2 rental-db\n  npx cds bind --exec -- node scripts/seed.js',
+    );
   }
+  await connectDb();
   await main();
 }
 

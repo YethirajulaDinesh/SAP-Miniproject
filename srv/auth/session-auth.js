@@ -24,23 +24,29 @@ function bearer(req) {
   return null;
 }
 
+function applyUser(req, user) {
+  req.user = user;
+  if (cds.context) cds.context.user = user;
+}
+
 module.exports = async function sessionAuth(req, res, next) {
-  const path = req.path || req.url || '';
+  const path = String(req.path || req.url || '').split('?')[0];
   if (req.method === 'OPTIONS' || PUBLIC.some((re) => re.test(path))) {
-    req.user = new cds.User();
+    applyUser(req, cds.User.anonymous);
     return next();
   }
   const token = bearer(req) || cookie(req, 're_session');
   const sess = token ? await lookupSession(token) : null;
   if (!sess) {
-    req.user = new cds.User();
+    applyUser(req, cds.User.anonymous);
     return next();
   }
-  req.user = new cds.User({
+  const user = new cds.User({
     id: sess.username,
     roles: [sess.role, 'authenticated-user'],
     attr: { plant: sess.plant || 'P1000' },
   });
-  req.user.plant = sess.plant;
+  user.plant = sess.plant;
+  applyUser(req, user);
   return next();
 };

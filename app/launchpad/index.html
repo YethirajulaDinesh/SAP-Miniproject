@@ -91,8 +91,19 @@ function showApp() {
   route = items[0][0];
   paint();
 }
+async function pingBackend() {
+  try {
+    const r = await fetch('/health', { cache: 'no-store' });
+    if (!r.ok) throw new Error(String(r.status));
+    return true;
+  } catch {
+    $('#loginErr').textContent = 'Backend is not running (502). In the project folder run: npm run dev  then open the URL shown for port 4004 — do not open index.html with Live Preview.';
+    return false;
+  }
+}
 async function login() {
   $('#loginErr').textContent = '';
+  if (!(await pingBackend())) return;
   try {
     const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username: $('#userName').value, password: $('#userPass').value }) });
     me = data.user; token = data.token; sessionStorage.setItem('re_token', token);
@@ -100,6 +111,10 @@ async function login() {
   } catch (e) { $('#loginErr').textContent = e.message; }
 }
 async function restore() {
+  if (!(await pingBackend())) {
+    $('#loginView').classList.remove('hidden');
+    return;
+  }
   token = sessionStorage.getItem('re_token');
   try {
     const data = await api('/api/auth/me');

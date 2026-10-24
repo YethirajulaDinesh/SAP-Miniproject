@@ -19,9 +19,15 @@ cds.on('bootstrap', (app) => {
   mountRest(app, cds);
 });
 
-cds.on('served', () => {
+cds.on('served', async () => {
   register(cds);
   start(cds);
+  try {
+    const { ensureDemoData } = require('./boot-seed');
+    await ensureDemoData(cds);
+  } catch (err) {
+    console.warn('[boot-seed]', err.message);
+  }
 });
 
 module.exports = cds.server;

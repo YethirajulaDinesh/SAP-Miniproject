@@ -12,12 +12,19 @@ Local/demo implementation of the SAP BTP CAP + Fiori + React Native solution des
 
 ## Commands
 
+From the project root (`rental-equipment-tracking`):
+
 ```bash
 npm install
-npx cds deploy --to sqlite:db.sqlite
-node scripts/seed.js
-npx cds-serve
+npm run dev
 ```
+
+`npm run dev` creates SQLite, loads demo users, and starts CAP on **port 4004**.
+
+Open **exactly** the URL CAP prints, then add `/app/launchpad/index.html`.  
+Do not open the HTML file with Live Preview — that causes **502** on Sign in because `/api` is not served.
+
+A **502** means CAP is not running (or you are on the wrong URL). Leave `npm run dev` running.
 
 Sign in at the launchpad (session cookie). Dev users (hashed in DB):
 

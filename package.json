@@ -8,7 +8,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "setup": "cds deploy --to sqlite:db.sqlite && node scripts/seed.js",
     "start": "cds-serve",
+    "dev": "npm run setup && cds-serve",
     "watch": "cds watch --open",
     "build": "cds build --production && node scripts/copy-app.js",
     "deploy:local": "cds deploy --to sqlite:db.sqlite",

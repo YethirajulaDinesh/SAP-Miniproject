@@ -3,34 +3,59 @@
 const cds = require('@sap/cds');
 const { seed } = require('../db/seed/data');
 
-async function main() {
-  await cds.connect.to('db');
-  const entities = cds.entities('rental.equipment');
-  const data = seed();
-  for (const [name, rows] of Object.entries(data)) {
-    if (!rows?.length) continue;
-    const entity = entities[name];
-    if (!entity) {
-      console.warn('skip unknown entity', name);
-      continue;
+function entityName(name) {
+  return `rental.equipment.${name}`;
+}
+
+async function upsertRows(tx, name, rows) {
+  const entity = entityName(name);
+  let inserted = 0;
+  let updated = 0;
+  for (const row of rows) {
+    const existing = row.ID
+      ? await tx.run(SELECT.one.from(entity).columns('ID').where({ ID: row.ID }))
+      : null;
+    if (existing) {
+      const { ID, ...patch } = row;
+      await tx.run(UPDATE(entity).set(patch).where({ ID }));
+      updated += 1;
+    } else {
+      await tx.run(INSERT.into(entity).entries(row));
+      inserted += 1;
     }
-    try {
-      await DELETE.from(entity);
-    } catch {
-      /* first run */
-    }
-    await INSERT.into(entity).entries(rows);
-    console.log('seeded', name, rows.length);
   }
-  console.log('database kind:', cds.env.requires?.db?.kind || 'unknown');
+  console.log('seeded', name, `${inserted} inserted, ${updated} updated`);
+}
+
+async function main() {
+  if (!cds.model) await cds.load('*');
+  if (!cds.db) await cds.connect.to('db');
+
+  const data = seed();
+  const privileged =
+    cds.User?.privileged ||
+    (typeof cds.User?.Privileged === 'function' ? new cds.User.Privileged() : new cds.User({ id: 'privileged' }));
+
+  await cds.tx({ user: privileged }, async (tx) => {
+    for (const [name, rows] of Object.entries(data)) {
+      if (!rows?.length) continue;
+      try {
+        await upsertRows(tx, name, rows);
+      } catch (err) {
+        console.warn('seed skipped', name, err.message);
+      }
+    }
+  });
+
+  console.log('database kind:', cds.db?.kind || cds.env.requires?.db?.kind || 'unknown');
 }
 
 async function boot() {
-  const kind = cds.env.requires?.db?.kind;
-  if (kind === 'hana') {
-    await cds.connect.to('db');
-  } else {
-    await cds.deploy('*');
+  if (!cds.model) await cds.load('*');
+  if (!cds.db) {
+    const kind = cds.env.requires?.db?.kind;
+    if (kind === 'hana') await cds.connect.to('db');
+    else await cds.deploy('*');
   }
   await main();
 }

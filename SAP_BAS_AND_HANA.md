@@ -32,15 +32,7 @@ Official CAP database guide: [Using SAP HANA Cloud](https://cap.cloud.sap/docs/g
 
 1. Open BAS → **Create Dev Space** → SAP Cloud Business Application → start it.
 2. **Clone from Git:** `https://github.com/YethirajulaDinesh/SAP-Miniproject.git`
-3. Terminal in the project root (`rental-equipment-tracking` if that is the folder, otherwise repo root):
-   ```sh
-   node -v          # must be 22+
-   npm install
-   npx cds deploy --to sqlite:db.sqlite
-   node scripts/seed.js
-   npm start
-   # or: npx cds watch
-   ```
+3. Terminal in the project root — **HANA commands** are in `RUN_HANA.md`. Do not use SQLite for the course deploy.
 4. Open the application URL BAS prints (port **4004**).
    - UI: `/app/launchpad/index.html`
    - Health: `/health`

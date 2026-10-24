@@ -22,12 +22,21 @@ async function main() {
     await INSERT.into(entity).entries(rows);
     console.log('seeded', name, rows.length);
   }
+  console.log('database kind:', cds.env.requires?.db?.kind || 'unknown');
+}
+
+async function boot() {
+  const kind = cds.env.requires?.db?.kind;
+  if (kind === 'hana') {
+    await cds.connect.to('db');
+  } else {
+    await cds.deploy('*');
+  }
+  await main();
 }
 
 if (require.main === module) {
-  cds
-    .deploy('*')
-    .then(main)
+  boot()
     .then(() => process.exit(0))
     .catch((err) => {
       console.error(err);

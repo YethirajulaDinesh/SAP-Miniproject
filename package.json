@@ -8,17 +8,18 @@
     "node": ">=22"
   },
   "scripts": {
-    "setup": "cds deploy --to sqlite:db.sqlite && node scripts/seed.js",
-    "start": "cds-serve",
-    "dev": "npm run setup && cds-serve",
-    "watch": "cds watch --open",
+    "setup": "cds deploy --to hana",
+    "setup:sqlite": "cds deploy --to sqlite:db.sqlite && node scripts/seed.js",
+    "start": "cds-serve --profile hybrid",
+    "dev": "cds watch --profile hybrid",
+    "watch": "cds watch --profile hybrid",
+    "seed": "node scripts/seed.js",
     "build": "cds build --production && node scripts/copy-app.js",
     "deploy:local": "cds deploy --to sqlite:db.sqlite",
     "lint": "eslint srv test scripts app --ext .js,.ts",
     "typecheck": "node -e \"require('fs').accessSync('srv/domain/lifecycle.js'); console.log('typecheck: JS domain present')\"",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "seed": "node scripts/seed.js",
     "smoke": "node scripts/smoke.mjs",
     "secret-scan": "node scripts/secret-scan.js",
     "ci": "npm run lint && npm run typecheck && npm test && npm run secret-scan && npm run build"
@@ -48,6 +49,9 @@
         "[development]": {
           "impl": "./srv/auth/session-auth.js"
         },
+        "[hybrid]": {
+          "impl": "./srv/auth/session-auth.js"
+        },
         "[production]": { "kind": "xsuaa" }
       },
       "db": {
@@ -56,6 +60,7 @@
           "credentials": { "url": "db.sqlite" },
           "impl": "@cap-js/sqlite"
         },
+        "[hybrid]": { "kind": "hana" },
         "[production]": { "kind": "hana" }
       }
     },

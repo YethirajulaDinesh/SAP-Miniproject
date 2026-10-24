@@ -12,19 +12,22 @@ Local/demo implementation of the SAP BTP CAP + Fiori + React Native solution des
 
 ## Commands
 
-From the project root (`rental-equipment-tracking`):
+**HANA (required for BAS / BTP):** follow **[RUN_HANA.md](RUN_HANA.md)**. Short path:
 
 ```bash
+git pull origin main
 npm install
+cf login
+cf create-service hana hdi-shared rental-db
+npx cds bind -2 rental-db
+npx cds deploy --to hana
+npx cds bind --exec -- node scripts/seed.js
 npm run dev
 ```
 
-`npm run dev` creates SQLite, loads demo users, and starts CAP on **port 4004**.
+Open the port **4004** URL + `/app/launchpad/index.html`. Login `manager` / `manager`.
 
-Open **exactly** the URL CAP prints, then add `/app/launchpad/index.html`.  
-Do not open the HTML file with Live Preview — that causes **502** on Sign in because `/api` is not served.
-
-A **502** means CAP is not running (or you are on the wrong URL). Leave `npm run dev` running.
+`npm run dev` is **HANA hybrid**, not SQLite. SQLite only: `npm run setup:sqlite` then `npx cds-serve`.
 
 Sign in at the launchpad (session cookie). Dev users (hashed in DB):
 

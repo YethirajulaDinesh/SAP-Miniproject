@@ -27,7 +27,7 @@
     input, select, textarea { padding:6px; margin:4px 0 8px; width:100%; box-sizing:border-box; }
     .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 16px; }
     .login { max-width:380px; margin:80px auto; background:#fff; padding:28px; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.12); }
-    .hidden { display:none; }
+    .hidden { display:none !important; }
     #busy { position:fixed; top:0; left:0; right:0; height:3px; background:var(--sapBrand); transform:scaleX(0); transform-origin:left; }
     #busy.on { transform:scaleX(1); transition: transform .4s; }
     .portal { min-height:100vh; background: radial-gradient(1200px 600px at 10% -10%, #5b8def 0%, transparent 50%), radial-gradient(900px 500px at 110% 10%, #20d4c8 0%, transparent 46%), linear-gradient(160deg, #0b1b3a 0%, #12335c 45%, #0e4d6c 100%); color:#fff; padding:36px 28px 64px; }
@@ -64,6 +64,15 @@
     .op-hero p { margin:0; opacity:.92; }
     .op-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
     .op-body { padding:16px 20px 28px; display:grid; gap:12px; }
+    .cam-box { display:grid; grid-template-columns:minmax(240px,1fr) minmax(180px,280px); gap:12px; align-items:start; }
+    .cam-stage { position:relative; background:#111; border-radius:8px; min-height:240px; overflow:hidden; }
+    .cam-stage video { display:block; width:100%; height:240px; object-fit:cover; background:#111; transform:none; }
+    .cam-stage.mirror video { transform:scaleX(-1); }
+    .cam-ph { position:absolute; inset:0; background:#1d2d3e; color:#d7e6ff; display:flex; align-items:center; justify-content:center; text-align:center; padding:16px; z-index:1; }
+    .cam-stage.live .cam-ph { display:none !important; }
+    .cam-box img { width:100%; min-height:120px; max-height:240px; background:#111; border-radius:8px; object-fit:cover; }
+    .cam-actions { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+    @media (max-width:720px) { .cam-box { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -114,7 +123,46 @@ const ROLES = [
   { key:'Admin', title:'Admin', user:'avi.admin', pass:'Admin#avi', color:'linear-gradient(145deg,#1b90ff,#024b9a)', ico:'⚙️', blurb:'Users, configuration and integration monitor.' },
   { key:'Auditor', title:'Auditor', user:'omar.audit', pass:'Audit#omar', color:'linear-gradient(145deg,#6a6d70,#32363a)', ico:'🧾', blurb:'Read-only audit history across processes.' },
 ];
-let me = null, token = null, route = null, selectedEq = null, selectedId = null, busy = 0, pickedRole = null;
+let me = null, token = null, route = null, selectedEq = null, selectedId = null, busy = 0, pickedRole = null, camStream = null;
+function stopCam() {
+  if (!camStream) return;
+  camStream.getTracks().forEach((t) => t.stop());
+  camStream = null;
+}
+function camErrorText(e) {
+  const name = e && e.name;
+  if (!window.isSecureContext) return 'Camera needs http://localhost or https. Do not open the file from disk.';
+  if (name === 'NotAllowedError') return 'Camera permission denied. Allow camera in the address bar, then click Open camera again.';
+  if (name === 'NotFoundError') return 'No camera found on this device.';
+  if (name === 'NotReadableError') return 'Camera is already in use by another app. Close that app and try again.';
+  if (name === 'OverconstrainedError') return 'This camera does not match the requested mode. Trying the default camera.';
+  if (name === 'SecurityError') return 'This page is not allowed to use the camera.';
+  return (e && (e.message || e.name)) || 'Camera failed';
+}
+async function requestCamera() {
+  if (!window.isSecureContext) throw Object.assign(new Error(camErrorText({})), { name: 'SecurityError' });
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error('This browser has no camera API. Use Chrome or Edge.');
+  }
+  const tries = [
+    { audio: false, video: { facingMode: { ideal: 'environment' } } },
+    { audio: false, video: { facingMode: 'user' } },
+    { audio: false, video: true },
+  ];
+  let last;
+  for (const constraints of tries) {
+    try { return await navigator.mediaDevices.getUserMedia(constraints); }
+    catch (e) {
+      last = e;
+      if (e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')) throw e;
+    }
+  }
+  if (last && last.name === 'NotReadableError') {
+    await new Promise((r) => setTimeout(r, 500));
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+  }
+  throw last || new Error('Could not open any camera');
+}
 const PREVIEW = new URLSearchParams(location.search).has('preview');
 const $ = (s) => document.querySelector(s);
 function esc(v) { return v==null||v==='' ? '' : String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -219,31 +267,93 @@ async function api(path, opts={}) {
   } finally { setBusy(false); }
 }
 function previewData(path) {
-  const eq = [
-    { ID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', serialNumber:'EXC-100', name:'Excavator 320', type:'EXCAVATOR', currentStatus:'AVAILABLE', plant:'P1000', manufacturer:'Caterpillar', model:'320', nextMaintenanceDate:'2026-11-15' },
-    { ID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc', serialNumber:'GEN-044', name:'Generator 200kW', type:'GENERATOR', currentStatus:'RENTED_OUT', plant:'P1000', manufacturer:'Kohler', model:'200REOZ', nextMaintenanceDate:'2026-12-01' },
+  const loc = [
+    { ID:'11111111-1111-4111-8111-111111111111', name:'North Yard' },
+    { ID:'22222222-2222-4222-8222-222222222222', name:'Workshop A' },
+    { ID:'33333333-3333-4333-8333-333333333333', name:'East Yard' },
   ];
-  const customers = [{ ID:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', companyName:'Harbor Civil LLC', contactPerson:'Rita Chen', email:'rita@harbor.example', plant:'P1000' }];
-  const rentals = [{ ID:'dddddddd-dddd-4ddd-8ddd-dddddddddddd', status:'CHECKED_OUT', rentalDate:'2026-10-20', expectedReturnDate:'2026-10-27', overdue:false, plant:'P1000', totalRentalAmount:5950, currency:'USD', customer:{ companyName:'Harbor Civil LLC' }, items:[{ equipment_ID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }] }];
-  const logs = [{ ID:'l1', inspectionType:'CHECK_OUT', conditionGrade:'A', submissionState:'SUBMITTED', inspectionDateTime:'2026-10-20T10:00:00Z', damages:[] }];
-  const damages = [{ ID:'d1', damageType:'HYDRAULIC', severity:'MEDIUM', liabilityState:'PENDING_REVIEW', damageState:'OPEN', newDamageComparedToCheckout:true }];
-  const bills = [{ ID:'b1', billingStatus:'PENDING_APPROVAL', totalAmount:420, currency:'USD', simulated:true, billDate:'2026-10-22' }];
-  const maint = [{ ID:'m1', maintenanceType:'REPAIR', status:'OPEN', date:'2026-10-22', assignedTechnician:'tom.tech', cost:null }];
-  const users = ROLES.map((r,i)=>({ ID:String(i), username:r.user, role:r.key, plant:r.key==='Admin'?'*':'P1000', active:true }));
+  const eq = [
+    { ID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', serialNumber:'CAT320-001', name:'Excavator EX-450', type:'EXCAVATOR', currentStatus:'RENTED_OUT', plant:'P1000', manufacturer:'Caterpillar', model:'320', nextMaintenanceDate:'2026-11-01', currentLocation: loc[0] },
+    { ID:'cccccccc-cccc-4ccc-8ccc-cccccccccccc', serialNumber:'AC90-014', name:'Generator GN-90', type:'GENERATOR', currentStatus:'RENTED_OUT', plant:'P1000', manufacturer:'Atlas Copco', model:'QAS90', nextMaintenanceDate:'2026-10-30', currentLocation: loc[0] },
+    { ID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', serialNumber:'WL-012', name:'Wheel Loader WL-12', type:'LOADER', currentStatus:'QUARANTINED', plant:'P1000', manufacturer:'Komatsu', model:'WA380', nextMaintenanceDate:'2026-10-28', currentLocation: loc[0] },
+    { ID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3', serialNumber:'BL-060', name:'Boom Lift BL-60', type:'AERIAL', currentStatus:'IN_REPAIR', plant:'P1000', manufacturer:'JLG', model:'600S', nextMaintenanceDate:'2026-10-26', currentLocation: loc[1] },
+    { ID:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4', serialNumber:'AC-185', name:'Air Compressor AC-185', type:'COMPRESSOR', currentStatus:'AVAILABLE', plant:'P2000', manufacturer:'Doosan', model:'P185', nextMaintenanceDate:'2026-12-10', currentLocation: loc[2] },
+  ];
+  const customers = [
+    { ID:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', companyName:'Gulf Construction LLC', contactPerson:'Maria Chen', email:'maria.chen@gulf.example', phone:'+1-713-555-0100', plant:'P1000' },
+    { ID:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', companyName:'Harbor Civil LLC', contactPerson:'Rita Chen', email:'rita@harbor.example', phone:'+1-713-555-0144', plant:'P1000' },
+    { ID:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', companyName:'Prairie Wind Energy', contactPerson:'Sam Okonkwo', email:'sam@prairie.example', phone:'+1-214-555-0190', plant:'P2000' },
+  ];
+  const rentals = [
+    { ID:'dddddddd-dddd-4ddd-8ddd-dddddddddddd', status:'CHECKED_OUT', rentalDate:'2026-10-20', expectedReturnDate:'2026-10-22', overdue:true, plant:'P1000', totalRentalAmount:2550, currency:'USD', customer: customers[0], customer_ID: customers[0].ID, items:[{ equipment_ID: eq[0].ID }] },
+    { ID:'dddddddd-dddd-4ddd-8ddd-ddddddddddd2', status:'CHECKED_OUT', rentalDate:'2026-10-18', expectedReturnDate:'2026-10-24', overdue:true, plant:'P1000', totalRentalAmount:1540, currency:'USD', customer: customers[1], customer_ID: customers[1].ID, items:[{ equipment_ID: eq[1].ID }] },
+    { ID:'dddddddd-dddd-4ddd-8ddd-ddddddddddd3', status:'CLOSED', rentalDate:'2026-10-01', expectedReturnDate:'2026-10-08', actualReturnDate:'2026-10-08', overdue:false, plant:'P1000', totalRentalAmount:1760, currency:'USD', customer: customers[0], customer_ID: customers[0].ID, items:[{ equipment_ID: eq[4].ID }] },
+    { ID:'dddddddd-dddd-4ddd-8ddd-ddddddddddd4', status:'BOOKED', rentalDate:'2026-10-25', expectedReturnDate:'2026-11-02', overdue:false, plant:'P2000', totalRentalAmount:1400, currency:'USD', customer: customers[2], customer_ID: customers[2].ID, items:[{ equipment_ID: eq[4].ID }] },
+  ];
+  const items = [
+    { ID:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', status:'CHECKED_OUT', equipment_ID: eq[0].ID, equipment: eq[0], rental: rentals[0] },
+    { ID:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2', status:'CHECKED_OUT', equipment_ID: eq[1].ID, equipment: eq[1], rental: rentals[1] },
+    { ID:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3', status:'RETURNED', equipment_ID: eq[4].ID, equipment: eq[4], rental: rentals[2] },
+    { ID:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee4', status:'RESERVED', equipment_ID: eq[4].ID, equipment: eq[4], rental: rentals[3] },
+  ];
+  const logs = [
+    { ID:'ffffffff-ffff-4fff-8fff-ffffffffffff', inspectionType:'CHECK_OUT', conditionGrade:'B', submissionState:'SUBMITTED', inspectionDateTime:'2026-10-20T14:00:00Z', damageCount:1, damages:[{ damageType:'COSMETIC' }] },
+    { ID:'12121212-1212-4121-8121-121212121212', inspectionType:'CHECK_IN', conditionGrade:'C', submissionState:'SUBMITTED', inspectionDateTime:'2026-10-23T16:30:00Z', damageCount:1, damages:[{ damageType:'HYDRAULIC' }] },
+    { ID:'12121212-1212-4121-8121-121212121213', inspectionType:'PERIODIC', conditionGrade:'B', submissionState:'SUBMITTED', inspectionDateTime:'2026-10-24T09:15:00Z', damageCount:1, damages:[{ damageType:'HYDRAULIC' }] },
+    { ID:'12121212-1212-4121-8121-121212121214', inspectionType:'POST_MAINTENANCE', conditionGrade:'A', submissionState:'DRAFT', inspectionDateTime:'2026-10-25T08:00:00Z', damageCount:0, damages:[] },
+  ];
+  const damages = [
+    { ID:'13131313-1313-4131-8131-131313131313', damageType:'HYDRAULIC', severity:'HIGH', liabilityState:'CUSTOMER_LIABLE', damageState:'UNDER_REVIEW', newDamageComparedToCheckout:true },
+    { ID:'14141414-1414-4141-8141-141414141414', damageType:'COSMETIC', severity:'LOW', liabilityState:'NOT_CUSTOMER_LIABLE', damageState:'CLOSED', newDamageComparedToCheckout:false },
+    { ID:'13131313-1313-4131-8131-131313131314', damageType:'HYDRAULIC', severity:'MEDIUM', liabilityState:'PENDING_REVIEW', damageState:'OPEN', newDamageComparedToCheckout:false },
+  ];
+  const bills = [
+    { ID:'b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1', billingStatus:'PENDING_APPROVAL', totalAmount:420, currency:'USD', simulated:true, billDate:'2026-10-24' },
+    { ID:'b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2', billingStatus:'WAIVED', totalAmount:0, currency:'USD', simulated:true, billDate:'2026-10-08' },
+  ];
+  const maint = [
+    { ID:'m1m1m1m1-m1m1-4m1m-8m1m-m1m1m1m1m1m1', maintenanceType:'REPAIR', status:'OPEN', date:'2026-10-24', assignedTechnician:'tom.tech', cost:890, nextMaintenanceDate:'2026-11-24' },
+    { ID:'m2m2m2m2-m2m2-4m2m-8m2m-m2m2m2m2m2m2', maintenanceType:'REPAIR', status:'IN_PROGRESS', date:'2026-10-23', assignedTechnician:'tom.tech', cost:null, nextMaintenanceDate:'' },
+    { ID:'m3m3m3m3-m3m3-4m3m-8m3m-m3m3m3m3m3m3', maintenanceType:'PERIODIC', status:'COMPLETE', date:'2026-10-15', assignedTechnician:'tom.tech', cost:340, nextMaintenanceDate:'2026-12-01' },
+  ];
+  const users = [
+    ...ROLES.map((r,i)=>({ ID:String(i+1), username:r.user, role:r.key, plant:r.key==='Admin'?'*':'P1000', active:true })),
+    { ID:'8', username:'lee.former', role:'YardWorker', plant:'P1000', active:false },
+  ];
+  const media = [
+    { ID:'p1', originalFileName:'checkout-overall.jpg', photoCategory:'OVERALL', uploadState:'COMPLETE', sha256:'aaa…' },
+    { ID:'p2', originalFileName:'checkin-hose-detail.jpg', photoCategory:'DETAIL', uploadState:'COMPLETE', sha256:'bbb…' },
+    { ID:'p3', originalFileName:'periodic-boom.jpg', photoCategory:'OVERALL', uploadState:'COMPLETE', sha256:'ccc…' },
+    { ID:'p4', originalFileName:'cylinder-seep.jpg', photoCategory:'DETAIL', uploadState:'COMPLETE', sha256:'ddd…' },
+  ];
+  const audit = [
+    { occurredAt:'2026-10-20T13:40:00Z', actor:'dan.dispatch', action:'bookRental', entityType:'Rentals', reason:'Customer PO GC-8821' },
+    { occurredAt:'2026-10-20T14:05:00Z', actor:'maria.yard', action:'submitInspection', entityType:'ConditionLogs', reason:'Checkout complete' },
+    { occurredAt:'2026-10-23T18:00:00Z', actor:'bella.billing', action:'confirmLiability', entityType:'DamageRecords', reason:'New vs checkout photos' },
+    { occurredAt:'2026-10-24T09:30:00Z', actor:'tom.tech', action:'createRepairJob', entityType:'MaintenanceRecords', reason:'Periodic inspection finding' },
+    { occurredAt:'2026-10-24T11:00:00Z', actor:'manager', action:'reviewOverdue', entityType:'Rentals', reason:'Expected return 2026-10-22' },
+    { occurredAt:'2026-10-24T12:00:00Z', actor:'avi.admin', action:'runMasterDataSync', entityType:'IntegrationOutbox', reason:'On-demand mock sync' },
+  ];
+  const outbox = [
+    { ID:'o1', eventType:'Customer.Sync', status:'SUCCEEDED', externalID:'MOCK-BP-1001', simulated:true },
+    { ID:'o2', eventType:'Billing.PostCharge', status:'PENDING', externalID:'', simulated:true },
+    { ID:'o3', eventType:'Equipment.Sync', status:'RETRY', externalID:'', simulated:true },
+  ];
   if (path.includes('/Equipment')) return { value: eq, ...eq.find(e=>path.includes(e.ID)) };
   if (path.includes('/Customers')) return { value: customers };
   if (path.includes('/Rentals')) return { value: rentals };
-  if (path.includes('/RentalItems')) return { value: [{ ID:'item1', status:'CHECKED_OUT', equipment_ID:eq[1].ID, equipment:eq[1] }] };
+  if (path.includes('/RentalItems')) return { value: items };
   if (path.includes('/ConditionLogs')) return { value: logs };
   if (path.includes('/DamageRecords')) return { value: damages };
   if (path.includes('/RepairBills')) return { value: bills };
   if (path.includes('/MaintenanceRecords')) return { value: maint };
-  if (path.includes('/MediaAssets')) return { value: [{ originalFileName:'checkout.jpg', photoCategory:'OVERALL', sha256:'abc123', uploadState:'COMPLETE' }] };
-  if (path.includes('/Locations')) return { value: [{ ID:'11111111-1111-4111-8111-111111111111', name:'North Yard' }] };
+  if (path.includes('/MediaAssets')) return { value: media };
+  if (path.includes('/Locations')) return { value: loc };
   if (path.includes('/AppUsers')) return { value: users };
-  if (path.includes('/AuditEvents')) return { value: [{ occurredAt:'2026-10-22T12:00:00Z', actor:'manager', action:'bookRental', entityType:'Rentals', reason:'' }] };
-  if (path.includes('/IntegrationOutbox')) return { value: [] };
-  if (path.includes('/TaxRules') || path.includes('/ApprovalRules')) return { value: [] };
+  if (path.includes('/AuditEvents')) return { value: audit };
+  if (path.includes('/IntegrationOutbox')) return { value: outbox };
+  if (path.includes('/TaxRules')) return { value: [{ ID:'tax1', kind:'Tax rule', active:true, name:'US-DEMO-PENDING-FINANCE' }] };
+  if (path.includes('/ApprovalRules')) return { value: [{ ID:'appr1', kind:'Approval rule', active:true, name:'Manual only until Finance threshold' }] };
   return { value: [] };
 }
 const odata = (p, o={}) => {
@@ -311,7 +421,16 @@ $('#userPass').addEventListener('keydown', (e) => { if (e.key==='Enter') login()
 $('#logoutBtn').onclick = async () => { await api('/api/auth/logout', { method:'POST' }); storeToken(null); showRoles(); };
 
 function formVal(id) { return document.getElementById(id).value; }
+async function uploadInspectionPhoto(file, conditionLogID) {
+  if (!file) throw new Error('Choose or capture a photo first');
+  if (PREVIEW) return { uploadID: 'preview', originalFileName: file.name };
+  const init = await api('/api/media/initiate', { method:'POST', body: JSON.stringify({ fileName: file.name, mimeType: file.type || 'image/jpeg', byteSize: file.size, conditionLogID, photoCategory:'OVERALL' }) });
+  const headers = { 'x-re-session': token || sessionStorage.getItem('re_token') || '' };
+  await fetch('/api/media/upload/' + init.uploadID, { method:'PUT', credentials:'include', headers, body: await file.arrayBuffer() });
+  return api('/api/media/finalize', { method:'POST', body: JSON.stringify({ uploadID: init.uploadID, conditionLogID, fileName: file.name, capturedAt: new Date().toISOString() }) });
+}
 async function paint() {
+  stopCam();
   const el = $('#app');
   el.innerHTML = '<p>Loading…</p>';
   try {
@@ -492,22 +611,120 @@ async function inspect() {
   document.getElementById('iStart').onclick = async () => {
     const [rentalItemID, equipmentID] = formVal('iItem').split('|');
     const started = await odata('/odata/v4/condition/startInspection', { method:'POST', body: JSON.stringify({ equipmentID, rentalItemID, inspectionType: formVal('iType'), clientOperationID: crypto.randomUUID() }) });
-    document.getElementById('iWork').innerHTML += `<p class="ok">Draft ${started.ID}</p>
-      <input type="file" id="iPhoto" accept="image/jpeg,image/png" />
-      <button id="iUp">Upload photo</button>
+    document.getElementById('iWork').innerHTML += `<p class="ok">Draft ${esc(started.ID)}</p>
+      <div class="card">
+        <h3>Take photo with camera</h3>
+        <p class="muted">Allow camera when the browser asks. Uses the rear camera on phones when available.</p>
+        <div class="cam-actions">
+          <button type="button" id="camOpen">Open camera</button>
+          <button type="button" id="camShot" class="secondary">Take photo</button>
+          <button type="button" id="camClose" class="secondary">Close camera</button>
+        </div>
+        <div class="cam-box">
+          <div class="cam-stage" id="camStage">
+            <div id="camPh" class="cam-ph">Click Open camera, then Allow when the browser asks.</div>
+            <video id="camVideo" autoplay muted playsinline></video>
+          </div>
+          <div>
+            <img id="camPrev" alt="Last captured photo" class="hidden" />
+            <canvas id="camCanvas" class="hidden"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Upload photo</h3>
+        <p class="muted">Keep using file upload for existing photos from disk or gallery.</p>
+        <input type="file" id="iPhoto" accept="image/jpeg,image/png,image/webp" />
+        <button type="button" id="iUp">Upload photo</button>
+      </div>
       <input id="dType" placeholder="Damage type" /><input id="dDesc" placeholder="Description" />
       <select id="dNew"><option value="true">New vs checkout</option><option value="false">Pre-existing</option></select>
       <button id="dAdd">Record damage</button>
       <button id="iSubmit">Submit inspection</button>
       <p id="iMsg" class="ok"></p>`;
+    const setMsg = (t, bad) => { const el = document.getElementById('iMsg'); el.textContent = t; el.className = bad ? 'bad' : 'ok'; };
+    document.getElementById('camOpen').onclick = async () => {
+      try {
+        setMsg('Asking for camera…');
+        stopCam();
+        const stage = document.getElementById('camStage');
+        stage.classList.remove('live', 'mirror');
+        camStream = await requestCamera();
+        const track = camStream.getVideoTracks()[0];
+        if (!track) throw new Error('No video track from camera');
+        track.enabled = true;
+        const facing = (track.getSettings && track.getSettings().facingMode) || '';
+        if (facing === 'user') stage.classList.add('mirror');
+        const v = document.getElementById('camVideo');
+        v.setAttribute('autoplay', '');
+        v.setAttribute('muted', '');
+        v.setAttribute('playsinline', '');
+        v.muted = true;
+        v.autoplay = true;
+        v.playsInline = true;
+        v.controls = false;
+        v.srcObject = null;
+        v.srcObject = camStream;
+        if (v.readyState < 1) {
+          await Promise.race([
+            new Promise((resolve) => v.addEventListener('loadedmetadata', resolve, { once: true })),
+            new Promise((resolve) => setTimeout(resolve, 1200)),
+          ]);
+        }
+        try { await v.play(); } catch { /* autoplay can fail if muted is ignored; preview still attaches */ }
+        stage.classList.add('live');
+        const w = v.videoWidth || (track.getSettings && track.getSettings().width) || 0;
+        setMsg(w ? 'Camera on. Frame the asset, then Take photo.' : 'Camera on. If the picture is blank, click Take photo anyway.');
+      } catch (e) { setMsg(camErrorText(e), true); }
+    };
+    document.getElementById('camShot').onclick = async () => {
+      if (!camStream) { setMsg('Open the camera first', true); return; }
+      const v = document.getElementById('camVideo');
+      const c = document.getElementById('camCanvas');
+      const track = camStream.getVideoTracks()[0];
+      let blob = null;
+      if (window.ImageCapture && track) {
+        try {
+          const bmp = await new ImageCapture(track).grabFrame();
+          c.width = bmp.width; c.height = bmp.height;
+          c.getContext('2d').drawImage(bmp, 0, 0);
+          blob = await new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.92));
+        } catch { /* fall through to video frame */ }
+      }
+      if (!blob) {
+        if (!v.videoWidth) { setMsg('Live picture is not ready yet. Click Open camera again.', true); return; }
+        c.width = v.videoWidth; c.height = v.videoHeight;
+        const ctx = c.getContext('2d');
+        if (document.getElementById('camStage').classList.contains('mirror')) {
+          ctx.translate(c.width, 0); ctx.scale(-1, 1);
+        }
+        ctx.drawImage(v, 0, 0);
+        blob = await new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.92));
+      }
+      if (!blob) { setMsg('Could not capture frame', true); return; }
+      const f = new File([blob], `inspection-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const prev = document.getElementById('camPrev');
+      prev.src = URL.createObjectURL(blob);
+      prev.classList.remove('hidden');
+      try {
+        await uploadInspectionPhoto(f, started.ID);
+        setMsg('Camera photo stored');
+      } catch (e) { setMsg(e.message, true); }
+    };
+    document.getElementById('camClose').onclick = () => {
+      stopCam();
+      const v = document.getElementById('camVideo');
+      v.srcObject = null;
+      document.getElementById('camStage').classList.remove('live', 'mirror');
+      setMsg('Camera closed');
+    };
     document.getElementById('iUp').onclick = async () => {
       const f = document.getElementById('iPhoto').files[0];
-      if (!f) return;
-      const init = await api('/api/media/initiate', { method:'POST', body: JSON.stringify({ fileName: f.name, mimeType: f.type, byteSize: f.size, conditionLogID: started.ID, photoCategory:'OVERALL' }) });
-      const headers = { 'x-re-session': token || sessionStorage.getItem('re_token') || '' };
-      await fetch('/api/media/upload/' + init.uploadID, { method:'PUT', credentials:'include', headers, body: await f.arrayBuffer() });
-      await api('/api/media/finalize', { method:'POST', body: JSON.stringify({ uploadID: init.uploadID, conditionLogID: started.ID, fileName: f.name }) });
-      document.getElementById('iMsg').textContent = 'Photo stored';
+      if (!f) { setMsg('Choose a file first', true); return; }
+      try {
+        await uploadInspectionPhoto(f, started.ID);
+        setMsg('Photo stored');
+      } catch (e) { setMsg(e.message, true); }
     };
     document.getElementById('dAdd').onclick = async () => {
       await odata('/odata/v4/condition/recordDamage', { method:'POST', body: JSON.stringify({ inspectionID: started.ID, damageType: formVal('dType'), description: formVal('dDesc'), severity:'MEDIUM', newDamageComparedToCheckout: formVal('dNew')==='true' }) });

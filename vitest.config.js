@@ -9,7 +9,7 @@ module.exports = defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json-summary'],
-      include: ['srv/domain/**/*.js'],
+      include: ['srv/lib/domain/**/*.js'],
       thresholds: { lines: 80, functions: 80, statements: 80 },
     },
   },

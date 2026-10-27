@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const lc = require('../srv/domain/lifecycle');
-const { calculateCharge, applyApprovalPolicy, assertChargeable } = require('../srv/domain/pricing');
-const { replayBatch } = require('../srv/domain/offline');
-const { nextOutboxStatus, assertNoBlindRetry, classifyError, maskPayload, sha256, idempotencyKey } = require('../srv/domain/outbox');
+const lc = require('../srv/lib/domain/lifecycle');
+const { calculateCharge, applyApprovalPolicy, assertChargeable } = require('../srv/lib/domain/pricing');
+const { replayBatch } = require('../srv/lib/domain/offline');
+const { nextOutboxStatus, assertNoBlindRetry, classifyError, maskPayload, sha256, idempotencyKey } = require('../srv/lib/domain/outbox');
 
 describe('lifecycle', () => {
   it('allows booked to checked out and rejects closed to booked', () => {
@@ -125,7 +125,7 @@ describe('offline replay and outbox', () => {
 });
 
 describe('demo passwords', () => {
-  const { hashPassword, verifyPassword, matchDemoPassword } = require('../srv/auth/passwords');
+  const { hashPassword, verifyPassword, matchDemoPassword } = require('../srv/lib/auth/passwords');
   it('verifies manager / manager even if stored hash has padding', () => {
     const stored = hashPassword('manager') + '  ';
     expect(verifyPassword('manager', stored)).toBe(true);

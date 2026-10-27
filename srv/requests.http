@@ -1,0 +1,37 @@
+# Sample requests for the REST Client extension (humao.rest-client).
+# Start the app first with `npm run dev`. Demo login only works in the development/hybrid profiles.
+
+@host = http://localhost:4004
+
+### Health
+GET {{host}}/health
+
+### Sign in - the session cookie is reused by the requests below
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "username": "manager", "password": "manager" }
+
+### Current user
+GET {{host}}/api/auth/me
+
+### Equipment
+GET {{host}}/odata/v4/rental/Equipment?$top=10&$count=true
+
+### Rentals with customer
+GET {{host}}/odata/v4/rental/Rentals?$expand=customer&$top=10
+
+### Inspections
+GET {{host}}/odata/v4/condition/ConditionLogs?$top=10
+
+### Repair bills
+GET {{host}}/odata/v4/damage/RepairBills?$top=10
+
+### Maintenance records
+GET {{host}}/odata/v4/maintenance/MaintenanceRecords?$top=10
+
+### Integration outbox
+GET {{host}}/odata/v4/integration/IntegrationOutbox?$top=10
+
+### Sign out
+POST {{host}}/api/auth/logout

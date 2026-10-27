@@ -23,8 +23,8 @@ function forceHana() {
 forceHana();
 
 const { register } = require('./handlers/register');
-const { start } = require('./workers/outbox-worker');
-const { mountRest } = require('./rest/api');
+const { start } = require('./lib/workers/outbox-worker');
+const { mountRest } = require('./lib/rest/api');
 
 cds.on('bootstrap', (app) => {
   forceHana();
@@ -45,7 +45,7 @@ cds.on('served', async () => {
   register(cds);
   start(cds);
   try {
-    const { ensureDemoUsers } = require('./boot-seed');
+    const { ensureDemoUsers } = require('./lib/boot-seed');
     await ensureDemoUsers();
     console.log('[boot-seed] demo users ready (manager / manager)');
   } catch (err) {

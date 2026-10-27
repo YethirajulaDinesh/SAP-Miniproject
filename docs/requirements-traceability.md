@@ -35,4 +35,4 @@
 | NFR-006 | CI | `.github/workflows/ci.yml` | |
 | NFR-007 | Mobile OS floor | documented; Expo/SDK dependent | mobile tests |
 | NFR-008 | Observability | /health /ready outbox | |
-| NFR-009 | ≥80% business-logic coverage | vitest on `srv/domain` | npm test |
+| NFR-009 | ≥80% business-logic coverage | vitest on `srv/lib/domain` | npm test |

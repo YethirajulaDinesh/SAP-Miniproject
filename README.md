@@ -60,19 +60,44 @@ This project is compatible with SAP Business Application Studio. Full steps (clo
 
 ## Project structure
 
-Standard SAP CAP layout:
+Standard SAP CAP layout (same organisation as a SAP BAS / Fiori tools generated CAP project):
 
-| Folder or file | Purpose |
-|----------------|---------|
-| `app/` | UI content: `launchpad/` (back-office UI served at `/app/launchpad/index.html`), `fleet-overview/` (Fiori elements descriptor), `services.cds` + `annotations.cds` (Fiori UI annotations) |
-| `db/` | Domain model (`schema.cds`) and demo seed data (`seed/data.js`) |
-| `srv/` | Service definitions (`services.cds`) and Node.js implementation (`server.js`, `handlers/`, `domain/`, `auth/`, `integrations/`, `rest/`, `workers/`) |
-| `test/` | Vitest unit and acceptance tests |
-| `scripts/` | Seed, build, smoke and secret-scan helpers |
-| `mobile/` | React Native offline inspection client (not served by CAP) |
-| `docs/` | Architecture, ADRs, runbooks (HANA / BAS), security, testing |
-| `.cdsrc.js`, `cds-plugin.js` | Force the SAP HANA database driver |
-| `mta.yaml`, `xs-security.json` | Cloud Foundry deployment (HDI, XSUAA, Destination) |
+```
+app/                          UI content
+  services.cds                  entry point for UI annotations (extended by the BAS Fiori generator)
+  annotations.cds               Fiori UI annotations (LineItem, HeaderInfo, Facets, ...)
+  launchpad/                    back-office UI: index.html, launchpad.css, launchpad.js
+  fleet-overview/               Fiori elements List Report / Object Page on Equipment
+    webapp/                       Component.js, index.html, manifest.json, i18n/
+    package.json, ui5.yaml
+db/
+  schema.cds                    domain model (namespace rental.equipment)
+  seed/data.js                  demo users and master data (npm run seed)
+srv/                          one .cds file per OData service
+  rental-service.cds            /odata/v4/rental
+  condition-service.cds         /odata/v4/condition
+  damage-service.cds            /odata/v4/damage
+  maintenance-service.cds       /odata/v4/maintenance
+  analytics-service.cds         /odata/v4/analytics
+  integration-service.cds       /odata/v4/integration
+  identity-service.cds          /odata/v4/identity
+  server.js                     bootstrap: HANA driver, static app/, REST API, handlers
+  handlers/register.js          service implementations (actions, validations)
+  lib/                          auth/, domain/, integrations/, rest/, workers/, boot-seed.js
+  requests.http                 sample requests (REST Client)
+test/                         Vitest unit and acceptance tests
+scripts/                      seed, build copy, smoke, secret scan
+mobile/                       React Native offline inspection client (not served by CAP)
+docs/                         architecture, ADRs, runbooks (HANA / BAS), security, testing
+.vscode/                      BAS / VS Code run configuration and tasks
+.cdsrc.js, cds-plugin.js      force the SAP HANA database driver
+mta.yaml, xs-security.json    Cloud Foundry deployment (HDI, XSUAA, Destination)
+```
+
+UIs after `npm run dev` (sign in on the launchpad first; the session cookie is shared):
+
+- Launchpad: `/app/launchpad/index.html`
+- Fleet Overview (Fiori elements): `/app/fleet-overview/webapp/index.html`
 
 ## Deployment
 

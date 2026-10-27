@@ -1,0 +1,68 @@
+    :root { --sapBrand:#0a6ed1; --sapBg:#f5f6f7; --sapTile:#fff; --sapText:#32363a; --sapCrit:#bb0000; --sapGood:#107e3e; }
+    body { margin:0; font-family:"72","Segoe UI",sans-serif; background:var(--sapBg); color:var(--sapText); }
+    header { background:#fff; color:#1d2d3e; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #d9d9d9; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+    header .muted { color:#6a6d70; }
+    nav { padding:8px 16px; background:#f7f7f7; display:flex; flex-wrap:wrap; gap:6px; border-bottom:1px solid #e5e5e5; }
+    nav button { background:#fff; color:#0a6ed1; border:1px solid #d9d9d9; }
+    nav button:hover { background:#e8f3ff; }
+    button { background:var(--sapBrand); color:#fff; border:0; padding:8px 12px; border-radius:4px; cursor:pointer; }
+    button.secondary { background:#fff; color:var(--sapBrand); border:1px solid var(--sapBrand); }
+    button.danger { background:var(--sapCrit); }
+    main { padding:16px 20px 48px; }
+    .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:12px 0 20px; }
+    .kpi, .facet, .card { background:var(--sapTile); padding:16px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+    .kpi b { font-size:28px; display:block; }
+    table { width:100%; border-collapse:collapse; background:#fff; }
+    th, td { padding:8px 10px; border-bottom:1px solid #e5e5e5; text-align:left; font-size:14px; }
+    .muted { color:#6a6d70; font-size:12px; }
+    .banner { background:#fff4e5; padding:8px 12px; margin:8px 0; border-left:4px solid #e9730c; }
+    .ok { color:var(--sapGood); } .bad { color:var(--sapCrit); }
+    input, select, textarea { padding:6px; margin:4px 0 8px; width:100%; box-sizing:border-box; }
+    .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 16px; }
+    .login { max-width:380px; margin:80px auto; background:#fff; padding:28px; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.12); }
+    .hidden { display:none !important; }
+    #busy { position:fixed; top:0; left:0; right:0; height:3px; background:var(--sapBrand); transform:scaleX(0); transform-origin:left; }
+    #busy.on { transform:scaleX(1); transition: transform .4s; }
+    .portal { min-height:100vh; background: radial-gradient(1200px 600px at 10% -10%, #5b8def 0%, transparent 50%), radial-gradient(900px 500px at 110% 10%, #20d4c8 0%, transparent 46%), linear-gradient(160deg, #0b1b3a 0%, #12335c 45%, #0e4d6c 100%); color:#fff; padding:36px 28px 64px; }
+    .portal-hero { max-width:1100px; margin:0 auto 28px; }
+    .portal-hero h1 { font-size:36px; margin:0 0 8px; letter-spacing:-0.03em; }
+    .portal-hero p { margin:0; color:#d7e6ff; font-size:16px; max-width:640px; }
+    .role-grid { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+    .role-tile { border:0; text-align:left; color:#fff; padding:22px 20px 18px; border-radius:18px; min-height:168px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 16px 40px rgba(0,0,0,.22); cursor:pointer; transition: transform .18s ease, box-shadow .18s ease; }
+    .role-tile:hover { transform: translateY(-6px); box-shadow:0 22px 48px rgba(0,0,0,.28); }
+    .role-tile b { font-size:22px; display:block; margin-top:10px; }
+    .role-tile span { opacity:.92; font-size:13px; line-height:1.4; }
+    .role-ico { width:42px; height:42px; border-radius:12px; background:rgba(255,255,255,.18); display:flex; align-items:center; justify-content:center; font-size:20px; }
+    .login .back { background:transparent; color:#0a6ed1; padding:0; margin-bottom:12px; }
+    .lr { background:#fff; border:1px solid #d9d9d9; border-radius:8px; overflow:hidden; }
+    .lr-head { padding:16px 20px 8px; }
+    .lr-head h1 { margin:0 0 4px; font-size:24px; color:#1d2d3e; }
+    .lr-filter { background:#f7f7f7; border-top:1px solid #e5e5e5; border-bottom:1px solid #e5e5e5; padding:12px 20px; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px 16px; align-items:end; }
+    .lr-filter label { font-size:12px; color:#6a6d70; display:block; }
+    .lr-filter input, .lr-filter select { margin:4px 0 0; background:#fff; }
+    .lr-toolbar { display:flex; justify-content:space-between; align-items:center; padding:10px 20px; }
+    .lr-toolbar .count { color:#6a6d70; font-size:13px; }
+    .lr table { margin:0; }
+    .lr tbody tr { cursor:pointer; }
+    .lr tbody tr:hover { background:#e8f3ff; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:12px; font-size:12px; font-weight:600; }
+    .chip-ok { background:#e8f5e9; color:#107e3e; }
+    .chip-warn { background:#fff4e5; color:#e9730c; }
+    .chip-bad { background:#ffebee; color:#bb0000; }
+    .chip-info { background:#e8f3ff; color:#0a6ed1; }
+    .op { background:#fff; border:1px solid #d9d9d9; border-radius:8px; overflow:hidden; }
+    .op-hero { background:linear-gradient(120deg,#0a6ed1,#0854a0); color:#fff; padding:20px 24px; }
+    .op-hero button { background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.4); }
+    .op-hero h1 { margin:8px 0 4px; font-size:26px; }
+    .op-hero p { margin:0; opacity:.92; }
+    .op-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .op-body { padding:16px 20px 28px; display:grid; gap:12px; }
+    .cam-box { display:grid; grid-template-columns:minmax(240px,1fr) minmax(180px,280px); gap:12px; align-items:start; }
+    .cam-stage { position:relative; background:#111; border-radius:8px; min-height:240px; overflow:hidden; }
+    .cam-stage video { display:block; width:100%; height:240px; object-fit:cover; background:#111; transform:none; }
+    .cam-stage.mirror video { transform:scaleX(-1); }
+    .cam-ph { position:absolute; inset:0; background:#1d2d3e; color:#d7e6ff; display:flex; align-items:center; justify-content:center; text-align:center; padding:16px; z-index:1; }
+    .cam-stage.live .cam-ph { display:none !important; }
+    .cam-box img { width:100%; min-height:120px; max-height:240px; background:#111; border-radius:8px; object-fit:cover; }
+    .cam-actions { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+    @media (max-width:720px) { .cam-box { grid-template-columns:1fr; } }

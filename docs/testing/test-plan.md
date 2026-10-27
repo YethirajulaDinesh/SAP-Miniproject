@@ -1,6 +1,6 @@
 # Test plan
 
-- Unit: `test/domain.test.js`, `test/acceptance.test.js` (vitest + coverage on `srv/domain`)
+- Unit: `test/domain.test.js`, `test/acceptance.test.js` (vitest + coverage on `srv/lib/domain`)
 - Mobile queue: `mobile/__tests__/offline.test.js`
 - API smoke: `scripts/smoke.js` against running cds-serve
 - UI: browser walkthrough of `/app/launchpad/index.html`

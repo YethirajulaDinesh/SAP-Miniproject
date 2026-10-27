@@ -1,6 +1,6 @@
 # SAP Business Application Studio and HANA
 
-This CAP Node.js project is compatible with SAP Business Application Studio (BAS). Local development uses SQLite. Cloud Foundry / BAS deploy uses SAP HANA Cloud (HDI) and XSUAA.
+This CAP Node.js project is compatible with SAP Business Application Studio (BAS). Local development and BAS run against SAP HANA Cloud (HDI) through the `hybrid` profile (`cds bind`). Cloud Foundry deploy uses SAP HANA Cloud (HDI) and XSUAA.
 
 Official CAP database guide: [Using SAP HANA Cloud](https://cap.cloud.sap/docs/guides/databases-hana)
 
@@ -10,7 +10,7 @@ Official CAP database guide: [Using SAP HANA Cloud](https://cap.cloud.sap/docs/g
 |------|--------|
 | CAP Node.js + CDS + OData V4 | Supported in BAS |
 | `cds watch` / `cds-serve` | Supported |
-| SQLite for first run in BAS | Supported (`@cap-js/sqlite`) |
+| SQLite | Not supported (HANA only; `postinstall` removes `@cap-js/sqlite`) |
 | HANA Cloud via HDI (`mta.yaml` `hdi-shared`) | Supported (`@cap-js/hana`) |
 | XSUAA (`xs-security.json`) | Production profile |
 | Custom HTML back office served by CAP | Works in BAS; not a Fiori Tools generator app |
@@ -32,17 +32,17 @@ Official CAP database guide: [Using SAP HANA Cloud](https://cap.cloud.sap/docs/g
 
 1. Open BAS → **Create Dev Space** → SAP Cloud Business Application → start it.
 2. **Clone from Git:** `https://github.com/YethirajulaDinesh/SAP-Miniproject.git`
-3. Terminal in the project root — **HANA commands** are in `RUN_HANA.md`. Do not use SQLite for the course deploy.
+3. Terminal in the project root — **HANA commands** are in [run-hana.md](run-hana.md). Do not use SQLite for the course deploy.
 4. Open the application URL BAS prints (port **4004**).
    - UI: `/app/launchpad/index.html`
    - Health: `/health`
 5. Sign in with a seeded user, for example `manager` / `manager`.
 
-BAS `cds watch` uses the **development** profile (SQLite + session login). That is enough to develop screens and CAP services.
+`npm run dev` uses the **hybrid** profile (HANA + session login). That is enough to develop screens and CAP services.
 
 ## Connect to SAP HANA Cloud and Database Explorer
 
-Do this when you want real HANA persistence, not SQLite.
+HANA is the only database for this project.
 
 ### A. Create / start HANA Cloud
 
@@ -64,20 +64,20 @@ In BTP cockpit: **SAP HANA Cloud** → ensure the instance is **Running**. Copy 
 After `cds build` artifacts exist:
 
 ```sh
-cds add hana          # already configured in package.json / mta.yaml
+# cds add hana is NOT needed: already configured in package.json / mta.yaml
 cf login
 cf create-service hana hdi-shared rental-db
 npx cds bind -2 rental-db
-npx cds watch --profile hybrid
 ```
 
-`cds bind` writes connection data locally (do **not** commit `default-env.json`). Hybrid profile uses HANA instead of SQLite.
+`cds bind` writes connection data locally (`.cdsrc-private.json`; do **not** commit it or `default-env.json`, both are in `.gitignore`). The hybrid profile uses HANA.
 
 Deploy schema to the bound HDI container:
 
 ```sh
 npx cds deploy --to hana
-node scripts/seed.js
+npm run seed
+npm run dev
 ```
 
 Seed is for demo users/master data. Do not run production financial seed against a live customer tenant without review.
@@ -106,10 +106,10 @@ On Cloud Foundry, authentication is **XSUAA**, not the local session users. Assi
 
 | Goal | Command / place |
 |------|-----------------|
-| BAS first run (SQLite) | `npm install` → `npx cds deploy --to sqlite:db.sqlite` → `node scripts/seed.js` → `npm start` |
+| BAS first run (HANA) | `npm install` → `npx cds bind -2 rental-db` → `npx cds deploy --to hana` → `npm run seed` → `npm run dev` |
 | Open UI | `/app/launchpad/index.html` |
 | Open HANA SQL | BAS → SAP HANA Database Explorer → add HANA Cloud or HDI |
-| App against HANA in BAS | `cds bind` + `cds watch --profile hybrid` |
+| App against HANA in BAS | `cds bind` + `npm run dev` |
 | Cloud deploy | `mbt build` + `cf deploy` |
 
 ## What is not live yet

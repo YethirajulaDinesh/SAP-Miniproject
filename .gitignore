@@ -8,10 +8,16 @@ gen/
 dist/
 coverage/
 .env
+.env.*
+!.env.example
 default-env.json
+default-*.json
+.cdsrc-private.json
 *.log
 .cds/
 .DS_Store
 mobile/node_modules/
 .vscode/
 mta_archives/
+*.mtar
+*_mta_build_tmp/

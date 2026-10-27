@@ -56,7 +56,7 @@ npx cds bind --exec -- node scripts/seed.js
 npm run dev
 ```
 
-That runs `cds watch --profile hybrid` (HANA, not SQLite).
+That runs `cds bind --exec -- cds-serve --profile hybrid --port 4004` (HANA, not SQLite).
 
 Open the **port 4004** URL:
 
@@ -78,9 +78,6 @@ cf deploy mta_archives/*.mtar
 
 That creates HDI + XSUAA from `mta.yaml`. After CF deploy, login uses XSUAA role collections, not the local session users.
 
-## SQLite fallback (only if HANA is unavailable)
+## SQLite
 
-```sh
-npm run setup:sqlite
-npx cds-serve
-```
+Not supported. The project is SAP HANA only: `postinstall` removes `@cap-js/sqlite`, and `.cdsrc.js` / `cds-plugin.js` / `srv/server.js` force the `@cap-js/hana` driver.

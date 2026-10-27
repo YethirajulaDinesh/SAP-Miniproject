@@ -1,9 +1,9 @@
-using RentalManagementService as rental from './services';
-using DamageManagementService as damage from './services';
-using MaintenanceManagementService as maint from './services';
-using AnalyticsService as analytics from './services';
-using IntegrationMonitorService as integ from './services';
-using ConditionManagementService as condition from './services';
+using RentalManagementService as rental from '../srv/rental-service';
+using DamageManagementService as damage from '../srv/damage-service';
+using MaintenanceManagementService as maint from '../srv/maintenance-service';
+using AnalyticsService as analytics from '../srv/analytics-service';
+using IntegrationMonitorService as integ from '../srv/integration-service';
+using ConditionManagementService as condition from '../srv/condition-service';
 
 annotate rental.Equipment with @(
   title: 'Fleet Equipment',

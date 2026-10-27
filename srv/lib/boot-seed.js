@@ -3,7 +3,7 @@
 const { USER_ENTITY } = require('./auth/db-user');
 
 async function ensureDemoUsers() {
-  const { seed } = require('../db/seed/data');
+  const { seed } = require('../../db/seed/data');
   const users = seed().AppUsers || [];
   const db = cds.db;
   if (!db) throw new Error('HANA db is not connected');

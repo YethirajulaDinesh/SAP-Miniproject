@@ -16,11 +16,11 @@
     "watch": "cds bind --exec -- cds-serve --profile hybrid",
     "seed": "cds bind --exec -- node scripts/seed.js",
     "build": "cds build --production && node scripts/copy-app.js",
-    "lint": "eslint srv test scripts app --ext .js,.ts",
-    "typecheck": "node -e \"require('fs').accessSync('srv/domain/lifecycle.js'); console.log('typecheck: JS domain present')\"",
+    "lint": "eslint srv test scripts --ext .js,.ts",
+    "typecheck": "node -e \"require('fs').accessSync('srv/lib/domain/lifecycle.js'); console.log('typecheck: JS domain present')\"",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "smoke": "node scripts/smoke.mjs",
+    "smoke": "node scripts/smoke.js",
     "secret-scan": "node scripts/secret-scan.js",
     "ci": "npm run lint && npm run typecheck && npm test && npm run secret-scan && npm run build"
   },
@@ -46,10 +46,10 @@
     "requires": {
       "auth": {
         "[development]": {
-          "impl": "./srv/auth/session-auth.js"
+          "impl": "./srv/lib/auth/session-auth.js"
         },
         "[hybrid]": {
-          "impl": "./srv/auth/session-auth.js"
+          "impl": "./srv/lib/auth/session-auth.js"
         },
         "[production]": {
           "kind": "xsuaa"
@@ -66,5 +66,8 @@
     "server": {
       "port": 4004
     }
-  }
+  },
+  "sapux": [
+    "app/fleet-overview"
+  ]
 }

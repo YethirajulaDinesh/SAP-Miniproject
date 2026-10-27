@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { assertChargeable, applyApprovalPolicy, calculateCharge } = require('../srv/domain/pricing');
-const { replayBatch } = require('../srv/domain/offline');
-const { assertNoBlindRetry, nextOutboxStatus, sha256 } = require('../srv/domain/outbox');
-const { plantAllowed, yardWorkerBlockedFromPrices, isReadOnlyRole, assertTransition, RENTAL_TRANSITIONS } = require('../srv/domain/lifecycle');
+const { assertChargeable, applyApprovalPolicy, calculateCharge } = require('../srv/lib/domain/pricing');
+const { replayBatch } = require('../srv/lib/domain/offline');
+const { assertNoBlindRetry, nextOutboxStatus, sha256 } = require('../srv/lib/domain/outbox');
+const { plantAllowed, yardWorkerBlockedFromPrices, isReadOnlyRole, assertTransition, RENTAL_TRANSITIONS } = require('../srv/lib/domain/lifecycle');
 
 describe('mandatory acceptance', () => {
   it('1. offline check-in with two damages syncs once', () => {

@@ -7,6 +7,6 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["srv/domain/**/*.ts"],
+  "include": ["srv/lib/domain/**/*.ts"],
   "exclude": ["node_modules", "mobile", "app"]
 }

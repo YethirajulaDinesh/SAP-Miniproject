@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { EncryptedQueue } = require('../src/offline/queue');
 const { nextStep } = require('../src/domain/inspectionWizard');
-const { replayBatch } = require('../../srv/domain/offline');
+const { replayBatch } = require('../../srv/lib/domain/offline');
 
 describe('mobile offline queue', () => {
   it('replays idempotently and never claims S/4 success', () => {

@@ -72,7 +72,7 @@ function mountRest(app) {
           console.warn('[login] could not persist demo user:', seedErr.message);
         }
         if (!user) {
-          const { seed } = require('../../db/seed/data');
+          const { seed } = require('../../../db/seed/data');
           user = (seed().AppUsers || []).find((u) => u.username === username);
         }
       }

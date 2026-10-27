@@ -15,10 +15,10 @@ const {
   plantAllowed,
   assertEquipmentAvailableForPeriod,
   assertCanCloseRental,
-} = require('../domain/lifecycle');
-const { hashPassword } = require('../auth/passwords');
-const { calculateCharge, applyApprovalPolicy, assertChargeable } = require('../domain/pricing');
-const { idempotencyKey } = require('../domain/outbox');
+} = require('../lib/domain/lifecycle');
+const { hashPassword } = require('../lib/auth/passwords');
+const { calculateCharge, applyApprovalPolicy, assertChargeable } = require('../lib/domain/pricing');
+const { idempotencyKey } = require('../lib/domain/outbox');
 
 function userRoles(req) {
   const r = [];
@@ -785,7 +785,7 @@ function register(cds) {
       if (userRoles(req).includes('Auditor')) throw new DomainError('Auditor cannot retry', 'FORBIDDEN', 403);
       const row = await SELECT.one.from(db.IntegrationOutbox).where({ ID: req.data.outboxID });
       await UPDATE(db.IntegrationOutbox, row.ID).with({ status: 'RETRY', nextAttemptAt: new Date().toISOString() });
-      const { processOne } = require('../workers/outbox-worker');
+      const { processOne } = require('../lib/workers/outbox-worker');
       await processOne(cds, { ...row, status: 'RETRY' });
       await audit(cds, req, 'retryMessage', 'IntegrationOutbox', row.ID);
       return SELECT.one.from(db.IntegrationOutbox).where({ ID: row.ID });
@@ -796,7 +796,7 @@ function register(cds) {
 
   integSrv.on('reconcileMessage', async (req) => {
     try {
-      const { billing } = require('../integrations/providers');
+      const { billing } = require('../lib/integrations/providers');
       const row = await SELECT.one.from(db.IntegrationOutbox).where({ ID: req.data.outboxID });
       const existing = await billing.reconcile(row.idempotencyKey);
       if (existing) {

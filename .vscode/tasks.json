@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "shell",
+      "label": "cds serve (SAP HANA hybrid)",
+      "command": "npm run dev"
+    },
+    {
+      "type": "shell",
+      "label": "test",
+      "command": "npm test"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+	"recommendations": [
+		"SAPSE.vscode-cds",
+		"dbaeumer.vscode-eslint",
+		"humao.rest-client"
+	]
+}
